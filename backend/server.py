@@ -433,10 +433,10 @@ async def sync_emails(user: User = Depends(require_auth)):
                     existing = await conn.fetchrow(
                         """
                         SELECT id FROM emails 
-                        WHERE user_id = $1 AND subject = $2
+                        WHERE user_id = $1 AND email_id = $2
                         LIMIT 1
                         """,
-                        uuid.UUID(user.id), email_id_str
+                        user.id, email_id_str
                     )
                     
                     if existing:
@@ -466,10 +466,10 @@ async def sync_emails(user: User = Depends(require_auth)):
                     # Save to database
                     await conn.execute(
                         """
-                        INSERT INTO emails (user_id, subject, sender, date, body, category, confidence)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        INSERT INTO emails (user_id, email_id, subject, sender, date, body, category, confidence)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                         """,
-                        uuid.UUID(user.id), subject, sender, email_date, body[:200], category, 0.9
+                        user.id, email_id_str, subject, sender, email_date, body[:200], category, 0.9
                     )
                     
                     categorized_count += 1
@@ -505,7 +505,7 @@ async def get_dashboard_stats(user: User = Depends(require_auth)):
         # Get all emails for this user
         all_emails = await conn.fetch(
             "SELECT * FROM emails WHERE user_id = $1",
-            uuid.UUID(user.id)
+            user.id
         )
         
         # Calculate category counts
@@ -523,7 +523,7 @@ async def get_dashboard_stats(user: User = Depends(require_auth)):
             ORDER BY date DESC 
             LIMIT 10
             """,
-            uuid.UUID(user.id)
+            user.id
         )
         
         recent_list = [
@@ -544,7 +544,7 @@ async def get_dashboard_stats(user: User = Depends(require_auth)):
             FROM emails 
             WHERE user_id = $1
             """,
-            uuid.UUID(user.id)
+            user.id
         )
         
         last_sync = last_sync_row["last_sync"] if last_sync_row else None
