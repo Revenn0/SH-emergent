@@ -7,6 +7,16 @@ const config = {
 };
 
 module.exports = {
+  devServer: {
+    allowedHosts: 'all',
+    port: 5000,
+    host: '0.0.0.0',
+    client: {
+      webSocketURL: {
+        port: 0,
+      },
+    },
+  },
   webpack: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
