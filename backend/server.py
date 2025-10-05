@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depends
+from fastapi import FastAPI, APIRouter, HTTPException
 from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -6,21 +6,13 @@ import asyncpg
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import List, Optional
-import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 import imaplib
 import email
 from email.header import decode_header
 import google.generativeai as genai
-import json
-import re
-import secrets
-import hashlib
-import base64
-from urllib.parse import urlencode
-import jwt
 
 
 ROOT_DIR = Path(__file__).parent
@@ -42,23 +34,11 @@ api_router = APIRouter(prefix="/api")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# Fixed user ID for all operations (no authentication)
+DEFAULT_USER_ID = "default"
+
 
 # ==================== MODELS ====================
-class User(BaseModel):
-    id: str
-    email: str
-    name: str
-    picture: str = ""
-    gmail_email: Optional[str] = None
-    gmail_app_password: Optional[str] = None
-    created_at: Optional[datetime] = None
-
-class UserSession(BaseModel):
-    user_id: str
-    session_token: str
-    expires_at: datetime
-    created_at: Optional[datetime] = None
-
 class ConnectGmailRequest(BaseModel):
     email: str
     app_password: str
@@ -82,6 +62,17 @@ async def startup_db():
     
     db_pool = await asyncpg.create_pool(database_url, min_size=2, max_size=10)
     logger.info("Database pool created")
+    
+    # Ensure default user exists
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO users (id, email, name, picture)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (id) DO NOTHING
+            """,
+            DEFAULT_USER_ID, "user@localhost", "User", ""
+        )
 
 
 @app.on_event("shutdown")
@@ -90,214 +81,6 @@ async def shutdown_db():
     if db_pool:
         await db_pool.close()
         logger.info("Database pool closed")
-
-
-# ==================== AUTH HELPER ====================
-async def get_current_user(request: Request) -> Optional[User]:
-    """Get current user from session_token in cookies or Authorization header"""
-    session_token = request.cookies.get("session_token")
-    
-    if not session_token:
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            session_token = auth_header.replace("Bearer ", "")
-    
-    if not session_token:
-        return None
-    
-    async with db_pool.acquire() as conn:
-        # Check session
-        session = await conn.fetchrow(
-            "SELECT * FROM user_sessions WHERE session_token = $1",
-            session_token
-        )
-        
-        if not session:
-            return None
-        
-        # Check expiry
-        expires_at = session["expires_at"]
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
-        
-        if datetime.now(timezone.utc) >= expires_at:
-            return None
-        
-        # Get user
-        user_row = await conn.fetchrow(
-            "SELECT * FROM users WHERE id = $1",
-            session["user_id"]
-        )
-        
-        if not user_row:
-            return None
-        
-        return User(
-            id=str(user_row["id"]),
-            email=user_row["email"],
-            name=user_row["name"] or "",
-            picture=user_row["picture"] or "",
-            gmail_email=user_row["gmail_email"],
-            gmail_app_password=user_row["gmail_app_password"],
-            created_at=user_row["created_at"]
-        )
-
-
-async def require_auth(request: Request) -> User:
-    """Require authentication"""
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return user
-
-
-# ==================== REPLIT AUTH ====================
-REPL_ID = os.environ.get('REPL_ID', '')
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5000')
-ISSUER_URL = "https://replit.com/oidc"
-
-pkce_verifiers = {}
-
-def generate_pkce():
-    """Generate PKCE code verifier and challenge"""
-    code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode('utf-8').rstrip('=')
-    code_challenge = base64.urlsafe_b64encode(
-        hashlib.sha256(code_verifier.encode('utf-8')).digest()
-    ).decode('utf-8').rstrip('=')
-    return code_verifier, code_challenge
-
-@api_router.get("/auth/login")
-async def auth_login():
-    """Redirect to Replit Auth"""
-    state = secrets.token_urlsafe(32)
-    code_verifier, code_challenge = generate_pkce()
-    
-    pkce_verifiers[state] = code_verifier
-    
-    redirect_uri = f"{FRONTEND_URL}/api/auth/callback"
-    
-    params = {
-        "client_id": REPL_ID,
-        "redirect_uri": redirect_uri,
-        "response_type": "code",
-        "scope": "openid email profile",
-        "state": state,
-        "code_challenge": code_challenge,
-        "code_challenge_method": "S256",
-        "prompt": "login consent"
-    }
-    
-    auth_url = f"{ISSUER_URL}/auth?{urlencode(params)}"
-    return {"auth_url": auth_url}
-
-
-@api_router.get("/auth/callback")
-async def auth_callback(code: str, state: str, response: Response):
-    """Handle Replit Auth callback"""
-    import httpx
-    
-    code_verifier = pkce_verifiers.pop(state, None)
-    if not code_verifier:
-        raise HTTPException(status_code=400, detail="Invalid state")
-    
-    redirect_uri = f"{FRONTEND_URL}/api/auth/callback"
-    
-    async with httpx.AsyncClient() as http_client:
-        token_response = await http_client.post(
-            f"{ISSUER_URL}/token",
-            data={
-                "code": code,
-                "client_id": REPL_ID,
-                "redirect_uri": redirect_uri,
-                "grant_type": "authorization_code",
-                "code_verifier": code_verifier
-            }
-        )
-        
-        if token_response.status_code != 200:
-            raise HTTPException(status_code=400, detail="Failed to get access token")
-        
-        token_data = token_response.json()
-        id_token = token_data.get("id_token")
-        
-        user_data = jwt.decode(id_token, options={"verify_signature": False})
-    
-    user_id = user_data["sub"]
-    
-    async with db_pool.acquire() as conn:
-        existing_user = await conn.fetchrow(
-            "SELECT * FROM users WHERE id = $1",
-            user_id
-        )
-        
-        user_email = user_data.get("email", "")
-        user_name = user_data.get("first_name", "") or user_email.split("@")[0]
-        user_picture = user_data.get("profile_image_url", "")
-        
-        if not existing_user:
-            await conn.execute(
-                """
-                INSERT INTO users (id, email, name, picture)
-                VALUES ($1, $2, $3, $4)
-                """,
-                user_id, user_email, user_name, user_picture
-            )
-        else:
-            await conn.execute(
-                """
-                UPDATE users
-                SET email = $2, name = $3, picture = $4
-                WHERE id = $1
-                """,
-                user_id, user_email, user_name, user_picture
-            )
-        
-        # Create session
-        session_token = str(uuid.uuid4())
-        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-        
-        await conn.execute(
-            """
-            INSERT INTO user_sessions (user_id, session_token, expires_at)
-            VALUES ($1, $2, $3)
-            """,
-            user_id, session_token, expires_at
-        )
-    
-    response = RedirectResponse(url=FRONTEND_URL)
-    response.set_cookie(
-        key="session_token",
-        value=session_token,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        max_age=7 * 24 * 60 * 60,
-        path="/"
-    )
-    
-    return response
-
-
-@api_router.get("/auth/me")
-async def get_me(user: User = Depends(require_auth)):
-    """Get current user info"""
-    return user
-
-
-@api_router.post("/auth/logout")
-async def logout(request: Request, response: Response):
-    """Logout user"""
-    session_token = request.cookies.get("session_token")
-    
-    if session_token:
-        async with db_pool.acquire() as conn:
-            await conn.execute(
-                "DELETE FROM user_sessions WHERE session_token = $1",
-                session_token
-            )
-    
-    response.delete_cookie(key="session_token", path="/")
-    return {"success": True}
 
 
 # ==================== GMAIL IMAP ====================
@@ -384,7 +167,7 @@ Respond with ONLY the category name (one word)."""
 
 
 @api_router.post("/gmail/connect")
-async def connect_gmail(request: ConnectGmailRequest, user: User = Depends(require_auth)):
+async def connect_gmail(request: ConnectGmailRequest):
     """Connect Gmail account via IMAP"""
     # Test connection
     imap = connect_imap(request.email, request.app_password)
@@ -398,21 +181,27 @@ async def connect_gmail(request: ConnectGmailRequest, user: User = Depends(requi
             SET gmail_email = $2, gmail_app_password = $3
             WHERE id = $1
             """,
-            user.id, request.email, request.app_password
+            DEFAULT_USER_ID, request.email, request.app_password
         )
     
     return {"success": True, "message": "Gmail connected successfully"}
 
 
 @api_router.post("/gmail/sync")
-async def sync_emails(user: User = Depends(require_auth)):
+async def sync_emails():
     """Fetch and categorize emails from Gmail"""
-    if not user.gmail_email or not user.gmail_app_password:
-        raise HTTPException(status_code=404, detail="Gmail not connected")
+    async with db_pool.acquire() as conn:
+        user = await conn.fetchrow(
+            "SELECT * FROM users WHERE id = $1",
+            DEFAULT_USER_ID
+        )
+        
+        if not user or not user['gmail_email'] or not user['gmail_app_password']:
+            raise HTTPException(status_code=404, detail="Gmail not connected")
     
     try:
         # Connect to Gmail
-        imap = connect_imap(user.gmail_email, user.gmail_app_password)
+        imap = connect_imap(user['gmail_email'], user['gmail_app_password'])
         imap.select("INBOX")
         
         # Search for recent emails (last 50)
@@ -436,7 +225,7 @@ async def sync_emails(user: User = Depends(require_auth)):
                         WHERE user_id = $1 AND email_id = $2
                         LIMIT 1
                         """,
-                        user.id, email_id_str
+                        DEFAULT_USER_ID, email_id_str
                     )
                     
                     if existing:
@@ -469,7 +258,7 @@ async def sync_emails(user: User = Depends(require_auth)):
                         INSERT INTO emails (user_id, email_id, subject, sender, date, body, category, confidence)
                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                         """,
-                        user.id, email_id_str, subject, sender, email_date, body[:200], category, 0.9
+                        DEFAULT_USER_ID, email_id_str, subject, sender, email_date, body[:200], category, 0.9
                     )
                     
                     categorized_count += 1
@@ -488,24 +277,29 @@ async def sync_emails(user: User = Depends(require_auth)):
 
 
 @api_router.get("/dashboard/stats")
-async def get_dashboard_stats(user: User = Depends(require_auth)):
+async def get_dashboard_stats():
     """Get dashboard statistics"""
     
-    if not user.gmail_email:
-        return DashboardStats(
-            connected=False,
-            email=None,
-            total_emails=0,
-            last_sync=None,
-            categories={},
-            recent_emails=[]
-        )
-    
     async with db_pool.acquire() as conn:
+        user = await conn.fetchrow(
+            "SELECT * FROM users WHERE id = $1",
+            DEFAULT_USER_ID
+        )
+        
+        if not user or not user['gmail_email']:
+            return DashboardStats(
+                connected=False,
+                email=None,
+                total_emails=0,
+                last_sync=None,
+                categories={},
+                recent_emails=[]
+            )
+        
         # Get all emails for this user
         all_emails = await conn.fetch(
             "SELECT * FROM emails WHERE user_id = $1",
-            user.id
+            DEFAULT_USER_ID
         )
         
         # Calculate category counts
@@ -523,7 +317,7 @@ async def get_dashboard_stats(user: User = Depends(require_auth)):
             ORDER BY date DESC 
             LIMIT 10
             """,
-            user.id
+            DEFAULT_USER_ID
         )
         
         recent_list = [
@@ -544,14 +338,14 @@ async def get_dashboard_stats(user: User = Depends(require_auth)):
             FROM emails 
             WHERE user_id = $1
             """,
-            user.id
+            DEFAULT_USER_ID
         )
         
         last_sync = last_sync_row["last_sync"] if last_sync_row else None
     
     return DashboardStats(
         connected=True,
-        email=user.gmail_email,
+        email=user['gmail_email'],
         total_emails=len(all_emails),
         last_sync=last_sync,
         categories=categories,
@@ -560,7 +354,7 @@ async def get_dashboard_stats(user: User = Depends(require_auth)):
 
 
 @api_router.delete("/gmail/disconnect")
-async def disconnect_gmail(user: User = Depends(require_auth)):
+async def disconnect_gmail():
     """Disconnect Gmail account"""
     async with db_pool.acquire() as conn:
         await conn.execute(
@@ -569,7 +363,7 @@ async def disconnect_gmail(user: User = Depends(require_auth)):
             SET gmail_email = NULL, gmail_app_password = NULL
             WHERE id = $1
             """,
-            user.id
+            DEFAULT_USER_ID
         )
     
     return {"success": True}

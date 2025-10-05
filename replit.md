@@ -12,7 +12,7 @@ This is an **Email Categorizer** application that uses AI (Google Gemini) to aut
 ### Tech Stack
 - **Backend**: Python FastAPI with PostgreSQL and Google Gemini AI
 - **Frontend**: React with Tailwind CSS
-- **Authentication**: Replit Auth (supports Google, GitHub, X, Apple, Email/Password)
+- **Authentication**: None (no login required)
 - **Email**: Gmail IMAP integration
 
 ## Architecture
@@ -37,11 +37,7 @@ The project consists of two main components:
 
 ✅ **Already Configured!** PostgreSQL database is automatically set up by Replit with environment variable `DATABASE_URL`.
 
-### 2. Authentication
-
-✅ **Already Configured!** Replit Auth is automatically configured using the Repl ID. No API keys needed!
-
-### 3. Google Gemini API Key
+### 2. Google Gemini API Key
 
 Get your API key from [Google AI Studio](https://makersuite.google.com/app/apikey) and update `backend/.env`:
 
@@ -49,7 +45,7 @@ Get your API key from [Google AI Studio](https://makersuite.google.com/app/apike
 GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
-### 4. Frontend URL
+### 3. Frontend URL
 
 ✅ **Already Configured!** Set to: `https://c363f9ef-5f69-4abe-887f-60d877a4e2ce-00-25ix68esofxzf.riker.replit.dev`
 
@@ -61,11 +57,9 @@ GEMINI_API_KEY=your_gemini_api_key_here
    - Frontend will be available on port 5000
    - Backend will be available on port 8080 (internal)
 
-3. **Access the App**: Open the web preview in Replit
+3. **Access the App**: Open the web preview in Replit - the dashboard opens automatically
 
-4. **Login**: Click "Entrar com Google" to authenticate via Replit Auth (supports multiple providers)
-
-5. **Connect Gmail**:
+4. **Connect Gmail**:
    - Generate a Gmail App Password:
      - Go to myaccount.google.com/security
      - Enable 2-factor authentication
@@ -73,7 +67,7 @@ GEMINI_API_KEY=your_gemini_api_key_here
      - Generate a new password for "Mail"
    - Enter your Gmail address and app password in the app
 
-6. **Sync Emails**: Click "Sincronizar" to fetch and categorize your emails
+5. **Sync Emails**: Click "Sincronizar" to fetch and categorize your emails
 
 ## Project Structure
 
@@ -165,14 +159,15 @@ To deploy:
 
 ## Recent Changes
 
-- **2025-10-05**: PostgreSQL Migration & Replit Auth Implementation
+- **2025-10-05**: Removed Authentication & Simplified App
+  - Removed all authentication - app opens directly to dashboard
+  - No login required - immediate access to Gmail connection
   - Migrated from MongoDB to PostgreSQL (Replit native database)
-  - Implemented Replit Auth (supports Google, GitHub, X, Apple, Email/Password)
   - Configured workflows for frontend and backend
   - Added grpcio library support with LD_LIBRARY_PATH fix
   - Configured proxy for frontend-backend communication
   - Set up CORS for Replit domains
-  - All environment variables auto-configured (DATABASE_URL, REPL_ID)
+  - All environment variables auto-configured (DATABASE_URL)
 
 ## User Preferences
 
