@@ -267,7 +267,7 @@ def get_email_body(msg):
 def categorize_with_gemini(subject: str, sender: str, body: str) -> str:
     """Categorize email using Gemini AI"""
     try:
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
         prompt = f"""Categorize this email into ONE of these categories: Primary, Social, Promotions, Updates, or Spam.
 
