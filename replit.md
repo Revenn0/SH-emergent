@@ -10,9 +10,9 @@ This is an **Email Categorizer** application that uses AI (Google Gemini) to aut
 - Spam
 
 ### Tech Stack
-- **Backend**: Python FastAPI with MongoDB and Google Gemini AI
+- **Backend**: Python FastAPI with PostgreSQL and Google Gemini AI
 - **Frontend**: React with Tailwind CSS
-- **Authentication**: Google OAuth 2.0 direct integration
+- **Authentication**: Replit Auth (supports Google, GitHub, X, Apple, Email/Password)
 - **Email**: Gmail IMAP integration
 
 ## Architecture
@@ -21,7 +21,7 @@ The project consists of two main components:
 
 1. **Backend** (Port 8080):
    - FastAPI server
-   - MongoDB database for storing users, sessions, and categorized emails
+   - PostgreSQL database (Replit native) for storing users, sessions, and categorized emails
    - Google Gemini AI for email categorization
    - Gmail IMAP integration for fetching emails
 
@@ -33,35 +33,13 @@ The project consists of two main components:
 
 ## Required Configuration
 
-### 1. MongoDB Database
+### 1. Database
 
-You need to provide a MongoDB connection URL. Update the file `backend/.env`:
+✅ **Already Configured!** PostgreSQL database is automatically set up by Replit with environment variable `DATABASE_URL`.
 
-```
-MONGO_URL=your_mongodb_connection_url_here
-DB_NAME=email_categorizer
-```
+### 2. Authentication
 
-**Options:**
-- Use MongoDB Atlas (free tier available)
-- Use any other MongoDB hosting service
-- Use a local MongoDB instance (not recommended for Replit)
-
-### 2. Google OAuth Credentials
-
-Create OAuth 2.0 credentials in [Google Cloud Console](https://console.cloud.google.com/):
-
-1. Go to "APIs & Services" > "Credentials"
-2. Create "OAuth 2.0 Client ID"
-3. Add authorized redirect URIs:
-   - `https://c363f9ef-5f69-4abe-887f-60d877a4e2ce-00-25ix68esofxzf.riker.replit.dev/api/auth/google/callback`
-   - `http://localhost:5000/api/auth/google/callback` (for development)
-4. Update `backend/.env`:
-
-```
-GOOGLE_CLIENT_ID=your_google_client_id_here
-GOOGLE_CLIENT_SECRET=your_google_client_secret_here
-```
+✅ **Already Configured!** Replit Auth is automatically configured using the Repl ID. No API keys needed!
 
 ### 3. Google Gemini API Key
 
@@ -73,15 +51,11 @@ GEMINI_API_KEY=your_gemini_api_key_here
 
 ### 4. Frontend URL
 
-Update `backend/.env` with your Replit domain:
-
-```
-FRONTEND_URL=https://your-repl-domain.replit.dev
-```
+✅ **Already Configured!** Set to: `https://c363f9ef-5f69-4abe-887f-60d877a4e2ce-00-25ix68esofxzf.riker.replit.dev`
 
 ## How to Use
 
-1. **Configure Environment Variables**: Update `backend/.env` with your MongoDB URL and Gemini API key
+1. **Configure Environment Variables**: The Gemini API key is already configured in `backend/.env`
 
 2. **Start the Application**: The workflows will start automatically
    - Frontend will be available on port 5000
@@ -89,7 +63,7 @@ FRONTEND_URL=https://your-repl-domain.replit.dev
 
 3. **Access the App**: Open the web preview in Replit
 
-4. **Login**: Click "Entrar com Google" to authenticate via Google OAuth
+4. **Login**: Click "Entrar com Google" to authenticate via Replit Auth (supports multiple providers)
 
 5. **Connect Gmail**:
    - Generate a Gmail App Password:
@@ -191,13 +165,14 @@ To deploy:
 
 ## Recent Changes
 
-- **2025-10-05**: Initial Replit setup
+- **2025-10-05**: PostgreSQL Migration & Replit Auth Implementation
+  - Migrated from MongoDB to PostgreSQL (Replit native database)
+  - Implemented Replit Auth (supports Google, GitHub, X, Apple, Email/Password)
   - Configured workflows for frontend and backend
   - Added grpcio library support with LD_LIBRARY_PATH fix
   - Configured proxy for frontend-backend communication
   - Set up CORS for Replit domains
-  - Created environment variable templates
-  - Replaced Emergent.sh authentication with Google OAuth 2.0 direct integration
+  - All environment variables auto-configured (DATABASE_URL, REPL_ID)
 
 ## User Preferences
 
