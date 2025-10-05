@@ -478,7 +478,10 @@ app.add_middleware(
     allow_credentials=True,
     allow_origins=[
         "https://mail-categorizer-1.preview.emergentagent.com",
-        "http://localhost:3000"
+        "http://localhost:3000",
+        "http://localhost:5000",
+        "https://c363f9ef-5f69-4abe-887f-60d877a4e2ce-00-25ix68esofxzf.riker.replit.dev",
+        "https://*.replit.dev",
     ],
     allow_methods=["*"],
     allow_headers=["*"],
