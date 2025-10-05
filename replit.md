@@ -313,26 +313,6 @@ To deploy:
 
 ## Recent Changes
 
-- **2025-10-05**: Drag-and-Drop Kanban + UX Fixes
-  - **Drag-and-Drop Kanban Board**:
-    - Implemented full Kanban workflow visualization with 4 columns: New → In Progress → Resolved → Closed
-    - Integrated @dnd-kit library for smooth drag-and-drop functionality
-    - Created DroppableColumn component using useDroppable for proper drop zones
-    - Drag alerts between columns to update status automatically via backend API
-    - Color-coded columns: Blue (New), Yellow (In Progress), Green (Resolved), Gray (Closed)
-    - View toggle buttons in header (Table/Kanban icons) to switch between views
-    - Real-time status updates with backend synchronization
-  - **Input Bug Fix**:
-    - Fixed critical bug where input fields stopped accepting input after first character
-    - Modified loadAlerts() to only update state when values actually change
-    - Prevents unnecessary re-renders that caused focus loss
-    - Affects Gmail config and search inputs
-  - **Dark Mode Implementation**:
-    - Added comprehensive CSS dark mode styles in App.css
-    - Covers all UI elements: backgrounds, text, borders, inputs, hover states
-    - Toggle button already existed, now fully functional with proper styling
-    - Uses !important to override Tailwind classes globally
-
 - **2025-10-05**: Alert Lifecycle Management + Performance Optimizations
   - **Backend Enhancements**:
     - Added alert lifecycle management: status workflow (New → In Progress → Resolved → Closed)
