@@ -54,10 +54,6 @@ externalPort = 80
 localPort = 8080
 externalPort = 8080
 
-[[ports]]
-localPort = 40179
-externalPort = 3000
-
 [deployment]
 deploymentTarget = "vm"
 run = ["bash", "-c", "export LD_LIBRARY_PATH=/nix/store/bmi5znnqk4kg2grkrhk6py0irc8phf6l-gcc-14.2.1.20250322-lib/lib:$LD_LIBRARY_PATH && cd backend && python -m uvicorn server:app --host 0.0.0.0 --port 8080 & cd frontend && PORT=5000 HOST=0.0.0.0 yarn start"]

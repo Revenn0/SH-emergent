@@ -441,6 +441,35 @@ function Dashboard({ user, onLogout }) {
           </div>
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div className="bg-white rounded-lg border border-red-200 p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-gray-600">Over-Turn</p>
+              <AlertTriangle className="w-4 h-4 text-red-600" />
+            </div>
+            <p className="text-2xl font-semibold text-red-700">{stats.overTurn || 0}</p>
+            <p className="text-xs text-gray-500 mt-1">Over-turn alerts</p>
+          </div>
+
+          <div className="bg-white rounded-lg border border-orange-200 p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-gray-600">No Communication</p>
+              <XCircle className="w-4 h-4 text-orange-600" />
+            </div>
+            <p className="text-2xl font-semibold text-orange-700">{stats.noCommunication || 0}</p>
+            <p className="text-xs text-gray-500 mt-1">Connection lost</p>
+          </div>
+
+          <div className="bg-white rounded-lg border border-purple-200 p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-gray-600">Heavy Impact</p>
+              <Activity className="w-4 h-4 text-purple-600" />
+            </div>
+            <p className="text-2xl font-semibold text-purple-700">{stats.heavyImpact || 0}</p>
+            <p className="text-xs text-gray-500 mt-1">Impact detected</p>
+          </div>
+        </div>
+
         {!gmailConnected && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <p className="text-sm text-yellow-800">
