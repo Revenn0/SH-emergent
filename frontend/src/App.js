@@ -443,31 +443,8 @@ function App() {
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    // Check for session_id in URL fragment
-    const hash = window.location.hash;
-    if (hash.includes("session_id=")) {
-      const sessionId = hash.split("session_id=")[1].split("&")[0];
-      processSessionId(sessionId);
-    } else {
-      checkAuth();
-    }
+    checkAuth();
   }, []);
-
-  const processSessionId = async (sessionId) => {
-    try {
-      const response = await api.post("/auth/session", { session_id: sessionId });
-      
-      // Clean URL
-      window.history.replaceState(null, "", window.location.pathname);
-      
-      // Load user
-      await checkAuth();
-    } catch (error) {
-      console.error("Session error:", error);
-      setLoading(false);
-      setAuthChecked(true);
-    }
-  };
 
   const checkAuth = async () => {
     try {

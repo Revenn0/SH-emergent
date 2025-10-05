@@ -12,7 +12,7 @@ This is an **Email Categorizer** application that uses AI (Google Gemini) to aut
 ### Tech Stack
 - **Backend**: Python FastAPI with MongoDB and Google Gemini AI
 - **Frontend**: React with Tailwind CSS
-- **Authentication**: Emergent.sh OAuth integration
+- **Authentication**: Google OAuth 2.0 direct integration
 - **Email**: Gmail IMAP integration
 
 ## Architecture
@@ -47,7 +47,23 @@ DB_NAME=email_categorizer
 - Use any other MongoDB hosting service
 - Use a local MongoDB instance (not recommended for Replit)
 
-### 2. Google Gemini API Key
+### 2. Google OAuth Credentials
+
+Create OAuth 2.0 credentials in [Google Cloud Console](https://console.cloud.google.com/):
+
+1. Go to "APIs & Services" > "Credentials"
+2. Create "OAuth 2.0 Client ID"
+3. Add authorized redirect URIs:
+   - `https://c363f9ef-5f69-4abe-887f-60d877a4e2ce-00-25ix68esofxzf.riker.replit.dev/api/auth/google/callback`
+   - `http://localhost:5000/api/auth/google/callback` (for development)
+4. Update `backend/.env`:
+
+```
+GOOGLE_CLIENT_ID=your_google_client_id_here
+GOOGLE_CLIENT_SECRET=your_google_client_secret_here
+```
+
+### 3. Google Gemini API Key
 
 Get your API key from [Google AI Studio](https://makersuite.google.com/app/apikey) and update `backend/.env`:
 
@@ -55,7 +71,7 @@ Get your API key from [Google AI Studio](https://makersuite.google.com/app/apike
 GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
-### 3. Frontend URL
+### 4. Frontend URL
 
 Update `backend/.env` with your Replit domain:
 
@@ -73,7 +89,7 @@ FRONTEND_URL=https://your-repl-domain.replit.dev
 
 3. **Access the App**: Open the web preview in Replit
 
-4. **Login**: Click "Entrar com Google" to authenticate via Emergent.sh
+4. **Login**: Click "Entrar com Google" to authenticate via Google OAuth
 
 5. **Connect Gmail**:
    - Generate a Gmail App Password:
@@ -124,8 +140,7 @@ This is necessary for the grpcio C extension to find the required C++ standard l
 
 The backend is configured to allow requests from:
 - localhost (development)
-- Replit domains (*.replit.dev)
-- Emergent.sh domains
+- Replit domains
 
 ### Proxy Configuration
 
@@ -182,6 +197,7 @@ To deploy:
   - Configured proxy for frontend-backend communication
   - Set up CORS for Replit domains
   - Created environment variable templates
+  - Replaced Emergent.sh authentication with Google OAuth 2.0 direct integration
 
 ## User Preferences
 

@@ -128,54 +128,75 @@ async def require_auth(request: Request) -> User:
     return user
 
 
-# ==================== EMERGENT AUTH ====================
+# ==================== GOOGLE OAUTH ====================
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5000')
+
 @api_router.get("/auth/login")
 async def auth_login():
-    """Redirect to Emergent auth"""
-    redirect_url = os.environ.get('FRONTEND_URL', 'https://mail-categorizer-1.preview.emergentagent.com') + "/dashboard"
-    auth_url = f"https://auth.emergentagent.com/?redirect={redirect_url}"
+    """Redirect to Google OAuth"""
+    redirect_uri = f"{FRONTEND_URL}/api/auth/google/callback"
+    auth_url = (
+        f"https://accounts.google.com/o/oauth2/v2/auth?"
+        f"client_id={GOOGLE_CLIENT_ID}&"
+        f"redirect_uri={redirect_uri}&"
+        f"response_type=code&"
+        f"scope=openid%20email%20profile&"
+        f"access_type=offline"
+    )
     return {"auth_url": auth_url}
 
 
-@api_router.post("/auth/session")
-async def create_session(request: Request, response: Response):
-    """Process session_id from Emergent auth"""
-    data = await request.json()
-    session_id = data.get("session_id")
-    
-    if not session_id:
-        raise HTTPException(status_code=400, detail="session_id required")
-    
-    # Get session data from Emergent
+@api_router.get("/auth/google/callback")
+async def google_callback(code: str, response: Response):
+    """Handle Google OAuth callback"""
     import httpx
+    
+    redirect_uri = f"{FRONTEND_URL}/api/auth/google/callback"
+    
     async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-            headers={"X-Session-ID": session_id}
+        token_response = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code"
+            }
         )
         
-        if resp.status_code != 200:
-            raise HTTPException(status_code=401, detail="Invalid session_id")
+        if token_response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Failed to get access token")
         
-        user_data = resp.json()
+        token_data = token_response.json()
+        access_token = token_data.get("access_token")
+        
+        user_info_response = await client.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
+        
+        if user_info_response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Failed to get user info")
+        
+        user_data = user_info_response.json()
     
-    # Check if user exists
     existing_user = await db.users.find_one({"email": user_data["email"]})
     
     if not existing_user:
-        # Create new user
         user = User(
             email=user_data["email"],
-            name=user_data["name"],
-            picture=user_data["picture"]
+            name=user_data.get("name", ""),
+            picture=user_data.get("picture", "")
         )
         await db.users.insert_one(user.dict())
         user_id = user.id
     else:
         user_id = existing_user["id"]
     
-    # Create session
-    session_token = user_data["session_token"]
+    session_token = str(uuid.uuid4())
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
     
     session = UserSession(
@@ -186,18 +207,18 @@ async def create_session(request: Request, response: Response):
     
     await db.user_sessions.insert_one(session.dict())
     
-    # Set cookie
+    response = RedirectResponse(url=f"{FRONTEND_URL}/dashboard")
     response.set_cookie(
         key="session_token",
         value=session_token,
         httponly=True,
         secure=True,
-        samesite="none",
+        samesite="lax",
         max_age=7 * 24 * 60 * 60,
         path="/"
     )
     
-    return {"success": True, "user": {"email": user_data["email"], "name": user_data["name"]}}
+    return response
 
 
 @api_router.get("/auth/me")
