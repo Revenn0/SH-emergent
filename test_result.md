@@ -210,13 +210,11 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Emergent Auth - Login, Session Management, Logout"
-    - "Gmail IMAP Connection"
     - "Email Sync and Categorization with Gemini"
-    - "Dashboard Stats API"
-  stuck_tasks: []
-  test_all: true
-  test_priority: "high_first"
+  stuck_tasks: 
+    - "Email Sync and Categorization with Gemini"
+  test_all: false
+  test_priority: "stuck_first"
 
 agent_communication:
   - agent: "main"
