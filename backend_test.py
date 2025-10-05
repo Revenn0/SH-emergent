@@ -244,6 +244,103 @@ class EmailCategorizerTester:
             self.log_test("Gemini Integration Check", False, f"Request failed: {str(e)}")
             return False
     
+    def test_gemini_categorization_direct(self):
+        """Test Gemini categorization function directly by calling the backend"""
+        try:
+            # Import the categorization function to test it directly
+            import sys
+            import os
+            sys.path.append('/app/backend')
+            
+            # Test if we can import and use the categorization function
+            from server import categorize_with_gemini
+            
+            # Test with sample email data
+            test_subject = "Special Offer: 50% Off All Items Today Only!"
+            test_sender = "deals@shopping.com"
+            test_body = "Don't miss out on our biggest sale of the year! Get 50% off everything in our store today only. Use code SAVE50 at checkout."
+            
+            category = categorize_with_gemini(test_subject, test_sender, test_body)
+            
+            # Check if we get a valid category
+            valid_categories = ["Primary", "Social", "Promotions", "Updates", "Spam"]
+            if category in valid_categories:
+                self.log_test("Gemini Categorization Direct", True, f"Successfully categorized as '{category}'")
+                return True
+            else:
+                self.log_test("Gemini Categorization Direct", False, f"Invalid category returned: '{category}'")
+                return False
+                
+        except Exception as e:
+            self.log_test("Gemini Categorization Direct", False, f"Categorization failed: {str(e)}")
+            return False
+    
+    def test_gemini_multiple_categories(self):
+        """Test Gemini categorization with different types of emails"""
+        try:
+            import sys
+            import os
+            sys.path.append('/app/backend')
+            from server import categorize_with_gemini
+            
+            test_emails = [
+                {
+                    "subject": "Your order has been shipped",
+                    "sender": "noreply@amazon.com",
+                    "body": "Your order #12345 has been shipped and will arrive tomorrow.",
+                    "expected_type": "Updates"
+                },
+                {
+                    "subject": "John Smith commented on your post",
+                    "sender": "notifications@facebook.com", 
+                    "body": "John Smith commented: 'Great photo!' on your recent post.",
+                    "expected_type": "Social"
+                },
+                {
+                    "subject": "Meeting reminder: Team standup",
+                    "sender": "sarah.johnson@company.com",
+                    "body": "Hi team, just a reminder about our standup meeting at 10 AM today.",
+                    "expected_type": "Primary"
+                },
+                {
+                    "subject": "URGENT: Verify your account now!",
+                    "sender": "security@suspicious-site.com",
+                    "body": "Your account will be suspended unless you verify immediately. Click here now!",
+                    "expected_type": "Spam"
+                }
+            ]
+            
+            successful_categorizations = 0
+            total_tests = len(test_emails)
+            
+            for i, email in enumerate(test_emails):
+                try:
+                    category = categorize_with_gemini(email["subject"], email["sender"], email["body"])
+                    valid_categories = ["Primary", "Social", "Promotions", "Updates", "Spam"]
+                    
+                    if category in valid_categories:
+                        successful_categorizations += 1
+                        print(f"   Email {i+1}: '{email['subject'][:30]}...' → {category}")
+                    else:
+                        print(f"   Email {i+1}: Invalid category '{category}'")
+                        
+                except Exception as e:
+                    print(f"   Email {i+1}: Failed - {str(e)}")
+            
+            if successful_categorizations == total_tests:
+                self.log_test("Gemini Multiple Categories", True, f"Successfully categorized all {total_tests} test emails")
+                return True
+            elif successful_categorizations > 0:
+                self.log_test("Gemini Multiple Categories", True, f"Categorized {successful_categorizations}/{total_tests} emails successfully")
+                return True
+            else:
+                self.log_test("Gemini Multiple Categories", False, "Failed to categorize any test emails")
+                return False
+                
+        except Exception as e:
+            self.log_test("Gemini Multiple Categories", False, f"Test setup failed: {str(e)}")
+            return False
+    
     def test_cors_headers(self):
         """Test CORS configuration"""
         try:
