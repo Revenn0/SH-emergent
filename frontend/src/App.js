@@ -184,8 +184,13 @@ function Dashboard({ user, onLogout }) {
       const response = await api.get(url);
       setAlerts(response.data.alerts);
       setStats(response.data.stats);
-      setGmailConnected(response.data.connected);
-      setGmailEmail(response.data.email || "");
+      
+      if (response.data.connected !== gmailConnected) {
+        setGmailConnected(response.data.connected);
+      }
+      if (response.data.email && response.data.email !== gmailEmail) {
+        setGmailEmail(response.data.email);
+      }
       
       groupAlertsByDevice(response.data.alerts);
     } catch (error) {
