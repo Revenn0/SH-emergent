@@ -332,6 +332,17 @@ function Dashboard({ user, onLogout }) {
     </div>
   );
 
+  const toggleDarkMode = () => {
+    const newMode = !darkMode;
+    setDarkMode(newMode);
+    localStorage.setItem("darkMode", newMode);
+    if (newMode) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  };
+
   const Header = () => (
     <header className="bg-white border-b border-gray-200 px-6 py-4">
       <div className="flex items-center justify-between">
@@ -355,14 +366,23 @@ function Dashboard({ user, onLogout }) {
             </p>
           </div>
         </div>
-        <button
-          onClick={handleSync}
-          disabled={syncing || !gmailConnected}
-          className="flex items-center space-x-2 px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-        >
-          <Activity className="w-4 h-4" />
-          <span>{syncing ? "Syncing..." : "Refresh Alerts"}</span>
-        </button>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={toggleDarkMode}
+            className="p-2 hover:bg-gray-100 rounded-md transition"
+            title={darkMode ? "Light mode" : "Dark mode"}
+          >
+            {darkMode ? <Sun className="w-5 h-5 text-gray-600" /> : <Moon className="w-5 h-5 text-gray-600" />}
+          </button>
+          <button
+            onClick={handleSync}
+            disabled={syncing || !gmailConnected}
+            className="flex items-center space-x-2 px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+          >
+            <Activity className="w-4 h-4" />
+            <span>{syncing ? "Syncing..." : "Refresh Alerts"}</span>
+          </button>
+        </div>
       </div>
     </header>
   );
@@ -432,25 +452,48 @@ function Dashboard({ user, onLogout }) {
         <div className="bg-white rounded-lg border border-gray-200">
           <div className="border-b border-gray-200 px-6 py-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <label className="text-xs font-medium text-gray-600">Filter by Category:</label>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
-                >
-                  {categories.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-                {selectedCategory !== "All" && (
-                  <button
-                    onClick={() => setSelectedCategory("All")}
-                    className="text-xs text-blue-600 hover:text-blue-800"
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <label className="text-xs font-medium text-gray-600">Filter by Category:</label>
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
                   >
-                    Clear filter
-                  </button>
-                )}
+                    {categories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                  {selectedCategory !== "All" && (
+                    <button
+                      onClick={() => setSelectedCategory("All")}
+                      className="text-xs text-blue-600 hover:text-blue-800"
+                    >
+                      Clear filter
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center space-x-2">
+                  <label className="text-xs font-medium text-gray-600">Search Plate:</label>
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 transform -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search..."
+                      className="pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none w-40"
+                    />
+                  </div>
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="text-xs text-blue-600 hover:text-blue-800"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="flex items-center space-x-2">
                 <label className="flex items-center space-x-2 text-xs text-gray-600">
@@ -491,14 +534,18 @@ function Dashboard({ user, onLogout }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {groupedAlerts.length === 0 ? (
+                  {groupedAlerts.filter(group => 
+                    !searchQuery || group.device.toLowerCase().includes(searchQuery.toLowerCase())
+                  ).length === 0 ? (
                     <tr>
                       <td colSpan="8" className="text-center py-12 text-sm text-gray-500">
-                        No alerts available
+                        {searchQuery ? `No alerts found for "${searchQuery}"` : "No alerts available"}
                       </td>
                     </tr>
                   ) : (
-                    groupedAlerts.map((group, idx) => (
+                    groupedAlerts.filter(group => 
+                      !searchQuery || group.device.toLowerCase().includes(searchQuery.toLowerCase())
+                    ).map((group, idx) => (
                       <tr 
                         key={idx} 
                         className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition"
