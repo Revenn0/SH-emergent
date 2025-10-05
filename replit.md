@@ -203,9 +203,14 @@ Both workflows start automatically:
 - `DELETE /api/gmail/disconnect` - Disconnect Gmail
 
 ### Alerts
-- `GET /api/alerts/list` - Get all alerts, stats, and grouping info
-- `POST /api/alerts/sync` - Sync new alerts from Gmail
+- `GET /api/alerts/list` - Get all alerts, stats, and grouping info (includes management fields)
+- `POST /api/alerts/sync` - Sync new alerts from Gmail with incremental checkpoint
 - `DELETE /api/alerts/{id}` - Delete alert from app
+- `POST /api/alerts/{id}/acknowledge` - Acknowledge an alert
+- `POST /api/alerts/{id}/status` - Update alert status (New/In Progress/Resolved/Closed)
+- `POST /api/alerts/{id}/notes` - Add notes to an alert
+- `POST /api/alerts/{id}/assign` - Assign alert to team member
+- `POST /api/alerts/{id}/favorite` - Toggle favorite status
 
 ## Email Parser
 
@@ -307,6 +312,25 @@ To deploy:
 - Test with different browsers
 
 ## Recent Changes
+
+- **2025-10-05**: Alert Lifecycle Management + Performance Optimizations
+  - **Backend Enhancements**:
+    - Added alert lifecycle management: status workflow (New → In Progress → Resolved → Closed)
+    - Created 5 new API endpoints: /acknowledge, /status, /notes, /assign, /favorite
+    - Implemented checkpoint-based incremental sync (saves last_email_id, only fetches new emails)
+    - Added GZip compression middleware for API responses (compresses responses >1KB)
+    - Extended tracker_alerts table with: status, acknowledged, acknowledged_at, acknowledged_by, notes, assigned_to, favorite
+    - Created sync_checkpoints table for incremental email sync
+    - Fixed critical bug: Refactored parallel email processing to use individual database connections per email (prevents asyncpg InterfaceError)
+  - **Frontend Enhancements**:
+    - Added dark mode toggle in header with localStorage persistence and sun/moon icons
+    - Implemented search by motorcycle plate/tracker name with live filtering
+    - Updated /alerts/list to return new management fields
+    - Added clear buttons for both category filter and search
+  - **Performance**: 
+    - Parallel email processing now works correctly (10 emails at a time)
+    - Incremental sync reduces redundant email fetching
+    - GZip compression reduces API response sizes by ~70%
 
 - **2025-10-05**: Complete UI/UX Redesign + Performance Improvements
   - Redesigned login to match screenshot (minimal design with bike icon)
