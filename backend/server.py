@@ -13,46 +13,123 @@ import imaplib
 import email
 from email.header import decode_header
 import google.generativeai as genai
+import re
 
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# PostgreSQL connection pool
 db_pool: Optional[asyncpg.Pool] = None
 
-# Configure Gemini
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
-# Create the main app
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Fixed user ID for all operations (no authentication)
 DEFAULT_USER_ID = "default"
 
 
-# ==================== MODELS ====================
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
 class ConnectGmailRequest(BaseModel):
     email: str
     app_password: str
 
-class DashboardStats(BaseModel):
-    connected: bool
-    email: Optional[str]
-    total_emails: int
-    last_sync: Optional[datetime]
-    categories: dict
-    recent_emails: List[dict]
+class SyncRequest(BaseModel):
+    limit: int = 50
 
 
-# ==================== DATABASE STARTUP/SHUTDOWN ====================
+def parse_tracker_email(body: str) -> dict:
+    """Parse tracker email to extract important information"""
+    data = {
+        "alert_type": "",
+        "time": "",
+        "location": "",
+        "latitude": "",
+        "longitude": "",
+        "device_serial": "",
+        "tracker_name": "",
+        "account_name": ""
+    }
+    
+    try:
+        alert_type_match = re.search(r'Alert type:\s*(.+)', body)
+        if alert_type_match:
+            data["alert_type"] = alert_type_match.group(1).strip()
+        
+        time_match = re.search(r'Time:\s*(.+?)(?:\(|$)', body)
+        if time_match:
+            data["time"] = time_match.group(1).strip()
+        
+        location_match = re.search(r'Location:\s*(.+)', body)
+        if location_match:
+            data["location"] = location_match.group(1).strip()
+        
+        coords_match = re.search(r'Latitude, Longitude:\s*([-\d.]+),\s*([-\d.]+)', body)
+        if coords_match:
+            data["latitude"] = coords_match.group(1).strip()
+            data["longitude"] = coords_match.group(2).strip()
+        
+        device_match = re.search(r'Device Serial Number:\s*(.+)', body)
+        if device_match:
+            data["device_serial"] = device_match.group(1).strip()
+        
+        tracker_match = re.search(r'Tracker Name:\s*(.+)', body)
+        if tracker_match:
+            data["tracker_name"] = tracker_match.group(1).strip()
+        
+        account_match = re.search(r'Account name:\s*(.+)', body)
+        if account_match:
+            data["account_name"] = account_match.group(1).strip()
+    except Exception as e:
+        logger.error(f"Error parsing email: {str(e)}")
+    
+    return data
+
+
+def categorize_alert(alert_type: str) -> str:
+    """Categorize alert based on type"""
+    alert_lower = alert_type.lower()
+    
+    if "heavy impact" in alert_lower:
+        return "Heavy Impact"
+    elif "light sensor" in alert_lower:
+        return "Light Sensor"
+    elif "out of country" in alert_lower:
+        return "Out Of Country"
+    elif "no communication" in alert_lower:
+        return "No Communication"
+    elif "over-turn" in alert_lower or "overturn" in alert_lower:
+        return "Over-turn"
+    elif "low battery" in alert_lower:
+        return "Low Battery"
+    elif "motion" in alert_lower:
+        return "Motion"
+    elif "new position" in alert_lower:
+        return "New Positions"
+    elif "high risk" in alert_lower:
+        return "High Risk Area"
+    elif "geofence" in alert_lower:
+        return "Custom GeoFence"
+    elif "rotation" in alert_lower:
+        return "Rotation Stop"
+    elif "temperature" in alert_lower:
+        return "Temperature"
+    elif "pressure" in alert_lower:
+        return "Pressure"
+    elif "humidity" in alert_lower:
+        return "Humidity"
+    else:
+        return "Other"
+
+
 @app.on_event("startup")
 async def startup_db():
     global db_pool
@@ -63,15 +140,48 @@ async def startup_db():
     db_pool = await asyncpg.create_pool(database_url, min_size=2, max_size=10)
     logger.info("Database pool created")
     
-    # Ensure default user exists
     async with db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id VARCHAR PRIMARY KEY,
+                email VARCHAR,
+                name VARCHAR,
+                picture VARCHAR,
+                gmail_email VARCHAR,
+                gmail_app_password VARCHAR
+            )
+            """
+        )
+        
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tracker_alerts (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR NOT NULL,
+                email_id VARCHAR NOT NULL,
+                alert_type VARCHAR,
+                alert_time VARCHAR,
+                location VARCHAR,
+                latitude VARCHAR,
+                longitude VARCHAR,
+                device_serial VARCHAR,
+                tracker_name VARCHAR,
+                account_name VARCHAR,
+                raw_body TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, email_id)
+            )
+            """
+        )
+        
         await conn.execute(
             """
             INSERT INTO users (id, email, name, picture)
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (id) DO NOTHING
             """,
-            DEFAULT_USER_ID, "user@localhost", "User", ""
+            DEFAULT_USER_ID, "admin@tracker.com", "Admin", ""
         )
 
 
@@ -83,7 +193,20 @@ async def shutdown_db():
         logger.info("Database pool closed")
 
 
-# ==================== GMAIL IMAP ====================
+@api_router.post("/auth/login")
+async def login(request: LoginRequest):
+    """Simple login - hardcoded credentials"""
+    if request.username == "admin" and request.password == "admin":
+        return {
+            "success": True,
+            "user": {
+                "username": "admin",
+                "email": "admin@tracker.com"
+            }
+        }
+    raise HTTPException(status_code=401, detail="Invalid credentials")
+
+
 def connect_imap(email_addr: str, app_password: str):
     """Connect to Gmail via IMAP"""
     try:
@@ -126,54 +249,15 @@ def get_email_body(msg):
             body = msg.get_payload(decode=True).decode('utf-8', errors='ignore')
         except:
             pass
-    return body[:500]
-
-
-def categorize_with_gemini(subject: str, sender: str, body: str) -> str:
-    """Categorize email using Gemini AI"""
-    try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        
-        prompt = f"""Categorize this email into ONE of these categories: Primary, Social, Promotions, Updates, or Spam.
-
-Email Details:
-From: {sender}
-Subject: {subject}
-Body Preview: {body}
-
-Rules:
-- Primary: Personal emails, important messages
-- Social: Social networks, forums, community
-- Promotions: Offers, marketing, advertisements
-- Updates: Notifications, receipts, automated messages
-- Spam: Unwanted or suspicious emails
-
-Respond with ONLY the category name (one word)."""
-
-        response = model.generate_content(prompt)
-        category = response.text.strip()
-        
-        # Validate category
-        valid_categories = ["Primary", "Social", "Promotions", "Updates", "Spam"]
-        for cat in valid_categories:
-            if cat.lower() in category.lower():
-                return cat
-        
-        return "Primary"
-        
-    except Exception as e:
-        logger.error(f"Gemini categorization error: {str(e)}")
-        return "Primary"
+    return body
 
 
 @api_router.post("/gmail/connect")
 async def connect_gmail(request: ConnectGmailRequest):
     """Connect Gmail account via IMAP"""
-    # Test connection
     imap = connect_imap(request.email, request.app_password)
     imap.logout()
     
-    # Store credentials in user record
     async with db_pool.acquire() as conn:
         await conn.execute(
             """
@@ -185,172 +269,6 @@ async def connect_gmail(request: ConnectGmailRequest):
         )
     
     return {"success": True, "message": "Gmail connected successfully"}
-
-
-@api_router.post("/gmail/sync")
-async def sync_emails():
-    """Fetch and categorize emails from Gmail"""
-    async with db_pool.acquire() as conn:
-        user = await conn.fetchrow(
-            "SELECT * FROM users WHERE id = $1",
-            DEFAULT_USER_ID
-        )
-        
-        if not user or not user['gmail_email'] or not user['gmail_app_password']:
-            raise HTTPException(status_code=404, detail="Gmail not connected")
-    
-    try:
-        # Connect to Gmail
-        imap = connect_imap(user['gmail_email'], user['gmail_app_password'])
-        imap.select("INBOX")
-        
-        # Search for recent emails (last 50)
-        _, message_numbers = imap.search(None, "ALL")
-        email_ids = message_numbers[0].split()
-        
-        # Get last 50 emails
-        email_ids = email_ids[-50:]
-        
-        categorized_count = 0
-        
-        async with db_pool.acquire() as conn:
-            for email_id in email_ids:
-                try:
-                    email_id_str = email_id.decode()
-                    
-                    # Check if already categorized
-                    existing = await conn.fetchrow(
-                        """
-                        SELECT id FROM emails 
-                        WHERE user_id = $1 AND email_id = $2
-                        LIMIT 1
-                        """,
-                        DEFAULT_USER_ID, email_id_str
-                    )
-                    
-                    if existing:
-                        continue
-                    
-                    # Fetch email
-                    _, msg_data = imap.fetch(email_id, "(RFC822)")
-                    email_body = msg_data[0][1]
-                    msg = email.message_from_bytes(email_body)
-                    
-                    # Extract details
-                    subject = decode_email_subject(msg.get("Subject", ""))
-                    sender = msg.get("From", "")
-                    date_str = msg.get("Date", "")
-                    body = get_email_body(msg)
-                    
-                    # Parse date
-                    try:
-                        from email.utils import parsedate_to_datetime
-                        email_date = parsedate_to_datetime(date_str)
-                    except:
-                        email_date = datetime.now(timezone.utc)
-                    
-                    # Categorize with Gemini
-                    category = categorize_with_gemini(subject, sender, body)
-                    
-                    # Save to database
-                    await conn.execute(
-                        """
-                        INSERT INTO emails (user_id, email_id, subject, sender, date, body, category, confidence)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                        """,
-                        DEFAULT_USER_ID, email_id_str, subject, sender, email_date, body[:200], category, 0.9
-                    )
-                    
-                    categorized_count += 1
-                    
-                except Exception as e:
-                    logger.error(f"Error processing email {email_id}: {str(e)}")
-                    continue
-        
-        imap.logout()
-        
-        return {"success": True, "categorized": categorized_count}
-        
-    except Exception as e:
-        logger.error(f"Sync error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
-
-
-@api_router.get("/dashboard/stats")
-async def get_dashboard_stats():
-    """Get dashboard statistics"""
-    
-    async with db_pool.acquire() as conn:
-        user = await conn.fetchrow(
-            "SELECT * FROM users WHERE id = $1",
-            DEFAULT_USER_ID
-        )
-        
-        if not user or not user['gmail_email']:
-            return DashboardStats(
-                connected=False,
-                email=None,
-                total_emails=0,
-                last_sync=None,
-                categories={},
-                recent_emails=[]
-            )
-        
-        # Get all emails for this user
-        all_emails = await conn.fetch(
-            "SELECT * FROM emails WHERE user_id = $1",
-            DEFAULT_USER_ID
-        )
-        
-        # Calculate category counts
-        categories = {"Primary": 0, "Social": 0, "Promotions": 0, "Updates": 0, "Spam": 0}
-        for email_row in all_emails:
-            cat = email_row["category"] or "Primary"
-            if cat in categories:
-                categories[cat] += 1
-        
-        # Get recent emails (last 10)
-        recent_emails = await conn.fetch(
-            """
-            SELECT * FROM emails 
-            WHERE user_id = $1 
-            ORDER BY date DESC 
-            LIMIT 10
-            """,
-            DEFAULT_USER_ID
-        )
-        
-        recent_list = [
-            {
-                "subject": e["subject"],
-                "sender": e["sender"],
-                "category": e["category"],
-                "date": e["date"].isoformat() if e.get("date") else None,
-                "snippet": e.get("body", "")[:200]
-            }
-            for e in recent_emails
-        ]
-        
-        # Get last sync time (most recent email created_at)
-        last_sync_row = await conn.fetchrow(
-            """
-            SELECT MAX(created_at) as last_sync 
-            FROM emails 
-            WHERE user_id = $1
-            """,
-            DEFAULT_USER_ID
-        )
-        
-        last_sync = last_sync_row["last_sync"] if last_sync_row else None
-    
-    return DashboardStats(
-        connected=True,
-        email=user['gmail_email'],
-        total_emails=len(all_emails),
-        last_sync=last_sync,
-        categories=categories,
-        recent_emails=recent_list
-    )
 
 
 @api_router.delete("/gmail/disconnect")
@@ -369,7 +287,148 @@ async def disconnect_gmail():
     return {"success": True}
 
 
-# Include the router
+@api_router.post("/alerts/sync")
+async def sync_alerts(request: SyncRequest):
+    """Fetch and categorize tracker alerts from Gmail"""
+    async with db_pool.acquire() as conn:
+        user = await conn.fetchrow(
+            "SELECT * FROM users WHERE id = $1",
+            DEFAULT_USER_ID
+        )
+        
+        if not user or not user['gmail_email'] or not user['gmail_app_password']:
+            raise HTTPException(status_code=404, detail="Gmail not connected")
+    
+    try:
+        imap = connect_imap(user['gmail_email'], user['gmail_app_password'])
+        imap.select("INBOX")
+        
+        _, message_numbers = imap.search(None, f'FROM "alerts-no-reply@tracking-update.com"')
+        email_ids = message_numbers[0].split()
+        
+        email_ids = email_ids[-request.limit:]
+        
+        categorized_count = 0
+        
+        async with db_pool.acquire() as conn:
+            for email_id in email_ids:
+                try:
+                    email_id_str = email_id.decode()
+                    
+                    existing = await conn.fetchrow(
+                        """
+                        SELECT id FROM tracker_alerts 
+                        WHERE user_id = $1 AND email_id = $2
+                        LIMIT 1
+                        """,
+                        DEFAULT_USER_ID, email_id_str
+                    )
+                    
+                    if existing:
+                        continue
+                    
+                    _, msg_data = imap.fetch(email_id, "(RFC822)")
+                    email_body = msg_data[0][1]
+                    msg = email.message_from_bytes(email_body)
+                    
+                    body = get_email_body(msg)
+                    
+                    parsed = parse_tracker_email(body)
+                    
+                    category = categorize_alert(parsed["alert_type"])
+                    
+                    await conn.execute(
+                        """
+                        INSERT INTO tracker_alerts (
+                            user_id, email_id, alert_type, alert_time, location, 
+                            latitude, longitude, device_serial, tracker_name, 
+                            account_name, raw_body
+                        )
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                        """,
+                        DEFAULT_USER_ID, email_id_str, category, 
+                        parsed["time"], parsed["location"], 
+                        parsed["latitude"], parsed["longitude"],
+                        parsed["device_serial"], parsed["tracker_name"],
+                        parsed["account_name"], body[:500]
+                    )
+                    
+                    categorized_count += 1
+                    
+                except Exception as e:
+                    logger.error(f"Error processing email {email_id}: {str(e)}")
+                    continue
+        
+        imap.logout()
+        
+        return {"success": True, "categorized": categorized_count}
+        
+    except Exception as e:
+        logger.error(f"Sync error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
+
+@api_router.get("/alerts/list")
+async def list_alerts():
+    """Get all tracker alerts"""
+    async with db_pool.acquire() as conn:
+        user = await conn.fetchrow(
+            "SELECT * FROM users WHERE id = $1",
+            DEFAULT_USER_ID
+        )
+        
+        alerts = await conn.fetch(
+            """
+            SELECT * FROM tracker_alerts 
+            WHERE user_id = $1 
+            ORDER BY created_at DESC
+            """,
+            DEFAULT_USER_ID
+        )
+        
+        categories = {}
+        for alert in alerts:
+            cat = alert["alert_type"] or "Other"
+            categories[cat] = categories.get(cat, 0) + 1
+        
+        alert_list = [
+            {
+                "id": a["id"],
+                "alert_type": a["alert_type"],
+                "alert_time": a["alert_time"],
+                "location": a["location"],
+                "latitude": a["latitude"],
+                "longitude": a["longitude"],
+                "device_serial": a["device_serial"],
+                "tracker_name": a["tracker_name"],
+                "account_name": a["account_name"]
+            }
+            for a in alerts
+        ]
+        
+        return {
+            "alerts": alert_list,
+            "stats": {
+                "total": len(alerts),
+                "categories": categories
+            },
+            "connected": bool(user and user['gmail_email']),
+            "email": user['gmail_email'] if user else None
+        }
+
+
+@api_router.delete("/alerts/{alert_id}")
+async def delete_alert(alert_id: int):
+    """Delete an alert (only from app, not from Gmail)"""
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM tracker_alerts WHERE id = $1 AND user_id = $2",
+            alert_id, DEFAULT_USER_ID
+        )
+    
+    return {"success": True}
+
+
 app.include_router(api_router)
 
 app.add_middleware(
