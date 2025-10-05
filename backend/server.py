@@ -16,6 +16,11 @@ from email.header import decode_header
 import google.generativeai as genai
 import json
 import re
+import secrets
+import hashlib
+import base64
+from urllib.parse import urlencode
+import jwt
 
 
 ROOT_DIR = Path(__file__).parent
@@ -128,42 +133,66 @@ async def require_auth(request: Request) -> User:
     return user
 
 
-# ==================== GOOGLE OAUTH ====================
-GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
-GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
+# ==================== REPLIT AUTH ====================
+REPL_ID = os.environ.get('REPL_ID', '')
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5000')
+ISSUER_URL = "https://replit.com/oidc"
+
+pkce_verifiers = {}
+
+def generate_pkce():
+    """Generate PKCE code verifier and challenge"""
+    code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode('utf-8').rstrip('=')
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode('utf-8')).digest()
+    ).decode('utf-8').rstrip('=')
+    return code_verifier, code_challenge
 
 @api_router.get("/auth/login")
 async def auth_login():
-    """Redirect to Google OAuth"""
-    redirect_uri = f"{FRONTEND_URL}/api/auth/google/callback"
-    auth_url = (
-        f"https://accounts.google.com/o/oauth2/v2/auth?"
-        f"client_id={GOOGLE_CLIENT_ID}&"
-        f"redirect_uri={redirect_uri}&"
-        f"response_type=code&"
-        f"scope=openid%20email%20profile&"
-        f"access_type=offline"
-    )
+    """Redirect to Replit Auth"""
+    state = secrets.token_urlsafe(32)
+    code_verifier, code_challenge = generate_pkce()
+    
+    pkce_verifiers[state] = code_verifier
+    
+    redirect_uri = f"{FRONTEND_URL}/api/auth/callback"
+    
+    params = {
+        "client_id": REPL_ID,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
+        "prompt": "login consent"
+    }
+    
+    auth_url = f"{ISSUER_URL}/auth?{urlencode(params)}"
     return {"auth_url": auth_url}
 
 
-@api_router.get("/auth/google/callback")
-async def google_callback(code: str, response: Response):
-    """Handle Google OAuth callback"""
+@api_router.get("/auth/callback")
+async def auth_callback(code: str, state: str, response: Response):
+    """Handle Replit Auth callback"""
     import httpx
     
-    redirect_uri = f"{FRONTEND_URL}/api/auth/google/callback"
+    code_verifier = pkce_verifiers.pop(state, None)
+    if not code_verifier:
+        raise HTTPException(status_code=400, detail="Invalid state")
     
-    async with httpx.AsyncClient() as client:
-        token_response = await client.post(
-            "https://oauth2.googleapis.com/token",
+    redirect_uri = f"{FRONTEND_URL}/api/auth/callback"
+    
+    async with httpx.AsyncClient() as http_client:
+        token_response = await http_client.post(
+            f"{ISSUER_URL}/token",
             data={
                 "code": code,
-                "client_id": GOOGLE_CLIENT_ID,
-                "client_secret": GOOGLE_CLIENT_SECRET,
+                "client_id": REPL_ID,
                 "redirect_uri": redirect_uri,
-                "grant_type": "authorization_code"
+                "grant_type": "authorization_code",
+                "code_verifier": code_verifier
             }
         )
         
@@ -171,30 +200,30 @@ async def google_callback(code: str, response: Response):
             raise HTTPException(status_code=400, detail="Failed to get access token")
         
         token_data = token_response.json()
-        access_token = token_data.get("access_token")
+        id_token = token_data.get("id_token")
         
-        user_info_response = await client.get(
-            "https://www.googleapis.com/oauth2/v2/userinfo",
-            headers={"Authorization": f"Bearer {access_token}"}
-        )
-        
-        if user_info_response.status_code != 200:
-            raise HTTPException(status_code=400, detail="Failed to get user info")
-        
-        user_data = user_info_response.json()
+        user_data = jwt.decode(id_token, options={"verify_signature": False})
     
-    existing_user = await db.users.find_one({"email": user_data["email"]})
+    user_id = user_data["sub"]
+    existing_user = await db.users.find_one({"id": user_id})
     
     if not existing_user:
         user = User(
-            email=user_data["email"],
-            name=user_data.get("name", ""),
-            picture=user_data.get("picture", "")
+            id=user_id,
+            email=user_data.get("email", ""),
+            name=user_data.get("first_name", "") or user_data.get("email", "").split("@")[0],
+            picture=user_data.get("profile_image_url", "")
         )
         await db.users.insert_one(user.dict())
-        user_id = user.id
     else:
-        user_id = existing_user["id"]
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {
+                "email": user_data.get("email", ""),
+                "name": user_data.get("first_name", "") or user_data.get("email", "").split("@")[0],
+                "picture": user_data.get("profile_image_url", "")
+            }}
+        )
     
     session_token = str(uuid.uuid4())
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
