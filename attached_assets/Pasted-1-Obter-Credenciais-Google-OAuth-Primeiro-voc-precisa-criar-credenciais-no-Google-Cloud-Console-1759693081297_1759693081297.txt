@@ -1,0 +1,171 @@
+1️⃣ Obter Credenciais Google OAuth
+Primeiro, você precisa criar credenciais no Google Cloud Console:
+
+Acesse: https://console.cloud.google.com/
+Crie um projeto ou selecione existente
+Vá em APIs & Services → Credentials
+Clique em Create Credentials → OAuth 2.0 Client ID
+Configure:
+Application type: Web application
+Authorized JavaScript origins:
+https://seu-projeto.replit.app (seu domínio Replit)
+Authorized redirect URIs:
+https://seu-projeto.replit.app/api/auth/google/callback
+Salve o Client ID e Client Secret
+2️⃣ Atualizar o Backend
+Você já tem o playbook de Google OAuth no sistema. Precisa substituir o código de Emergent Auth pelo código de Google OAuth direto.
+
+Instalar biblioteca necessária:
+
+pip install authlib
+Modificar /app/backend/server.py:
+
+Substitua a seção de Emergent Auth por este código:
+
+from authlib.integrations.starlette_client import OAuth
+from starlette.middleware.sessions import SessionMiddleware
+
+# Adicione logo após criar o app
+app.add_middleware(SessionMiddleware, secret_key=os.environ.get('SESSION_SECRET', 'your-secret-key-here'))
+
+# Configure OAuth
+oauth = OAuth()
+oauth.register(
+    name='google',
+    client_id=os.environ.get('GOOGLE_CLIENT_ID'),
+    client_secret=os.environ.get('GOOGLE_CLIENT_SECRET'),
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile'}
+)
+
+# Substitua os endpoints de auth
+@api_router.get("/auth/login")
+async def auth_login(request: Request):
+    """Inicia login Google OAuth"""
+    redirect_uri = request.url_for('auth_callback')
+    return await oauth.google.authorize_redirect(request, redirect_uri)
+
+
+@api_router.get("/auth/google/callback")
+async def auth_callback(request: Request, response: Response):
+    """Processa callback do Google"""
+    try:
+        token = await oauth.google.authorize_access_token(request)
+        user_info = token.get('userinfo')
+        
+        # Verifica se usuário existe
+        existing_user = await db.users.find_one({"email": user_info["email"]})
+        
+        if not existing_user:
+            # Cria novo usuário
+            user = User(
+                email=user_info["email"],
+                name=user_info.get("name", ""),
+                picture=user_info.get("picture", "")
+            )
+            await db.users.insert_one(user.dict())
+            user_id = user.id
+        else:
+            user_id = existing_user["id"]
+        
+        # Cria sessão
+        session_token = str(uuid.uuid4())
+        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        
+        session = UserSession(
+            user_id=user_id,
+            session_token=session_token,
+            expires_at=expires_at
+        )
+        
+        await db.user_sessions.insert_one(session.dict())
+        
+        # Define cookie
+        response = RedirectResponse(url="/dashboard")
+        response.set_cookie(
+            key="session_token",
+            value=session_token,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=7 * 24 * 60 * 60,
+            path="/"
+        )
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Auth callback error: {str(e)}")
+        return RedirectResponse(url="/?error=auth_failed")
+
+
+# Mantenha os endpoints /auth/me e /auth/logout como estão
+3️⃣ Atualizar o Frontend
+Modificar /app/frontend/src/App.js:
+
+Na função handleLogin, mude de:
+
+// ANTES (Emergent Auth)
+const handleLogin = async () => {
+  setLoading(true);
+  try {
+    const response = await api.get("/auth/login");
+    window.location.href = response.data.auth_url;
+  } catch (error) {
+    console.error("Login error:", error);
+    alert("Failed to initiate login");
+    setLoading(false);
+  }
+};
+Para:
+
+// DEPOIS (Google OAuth Direto)
+const handleLogin = () => {
+  window.location.href = `${API}/auth/login`;
+};
+Remover o código de processamento de session_id:
+
+Delete esta parte do useEffect:
+
+// REMOVER ISTO:
+const hash = window.location.hash;
+if (hash.includes("session_id=")) {
+  const sessionId = hash.split("session_id=")[1].split("&")[0];
+  processSessionId(sessionId);
+} else {
+  checkAuth();
+}
+
+// E a função processSessionId também
+Substituir por:
+
+useEffect(() => {
+  checkAuth();
+}, []);
+4️⃣ Configurar Variáveis de Ambiente no Replit
+No Replit, vá em Secrets e adicione:
+
+GOOGLE_CLIENT_ID=seu_client_id_aqui
+GOOGLE_CLIENT_SECRET=seu_client_secret_aqui
+SESSION_SECRET=uma_chave_secreta_aleatoria
+MONGO_URL=sua_mongodb_connection_string
+DB_NAME=test_database
+5️⃣ Atualizar requirements.txt
+Adicione:
+
+authlib
+itsdangerous
+📋 Resumo das Mudanças
+Componente	Emergent Auth	Google OAuth Direto
+Autenticação	Gerenciada pela Emergent	Você gerencia
+Redirect	Para domínio Emergent	Para seu domínio Replit
+Credenciais	Não precisa	Precisa Client ID/Secret
+Código Backend	Endpoint simples	OAuth flow completo
+Código Frontend	Processa session_id	Redirect direto
+Depois dessas mudanças, o fluxo será:
+
+Usuário clica "Entrar com Google"
+Redireciona para Google OAuth
+Google redireciona de volta para seu domínio Replit
+Sistema cria sessão e redireciona para dashboard
+Precisa de ajuda para implementar essas mudanças? 🚀
