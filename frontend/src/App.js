@@ -5,8 +5,26 @@ import {
   Bell, Settings, LayoutDashboard, LogOut, Menu, X, Trash2, 
   AlertTriangle, Database, Mail, Activity, Bike, CheckCircle, 
   XCircle, Clock, MapPin, Info, Moon, Sun, Search, Star, UserPlus, 
-  MessageSquare, CheckCircle2
+  MessageSquare, CheckCircle2, List, Columns
 } from "lucide-react";
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -135,6 +153,7 @@ function Dashboard({ user, onLogout }) {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState("table");
 
   useEffect(() => {
     loadAlerts();
@@ -281,6 +300,16 @@ function Dashboard({ user, onLogout }) {
     }
   };
 
+  const updateAlertStatus = async (alertId, newStatus) => {
+    try {
+      await api.post(`/alerts/${alertId}/status`, { status: newStatus });
+      await loadAlerts();
+    } catch (error) {
+      console.error("Failed to update status:", error);
+      alert("Failed to update alert status");
+    }
+  };
+
   const openAlertModal = (group) => {
     setSelectedAlert(group);
     setShowModal(true);
@@ -383,6 +412,32 @@ function Dashboard({ user, onLogout }) {
           </div>
         </div>
         <div className="flex items-center space-x-3">
+          {currentPage === "dashboard" && (
+            <div className="flex items-center space-x-1 border border-gray-300 rounded-md p-1">
+              <button
+                onClick={() => setViewMode("table")}
+                className={`p-2 rounded transition ${
+                  viewMode === "table" 
+                    ? "bg-gray-900 text-white" 
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
+                title="Table view"
+              >
+                <List className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode("kanban")}
+                className={`p-2 rounded transition ${
+                  viewMode === "kanban" 
+                    ? "bg-gray-900 text-white" 
+                    : "text-gray-600 hover:bg-gray-100"
+                }`}
+                title="Kanban view"
+              >
+                <Columns className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <button
             onClick={toggleDarkMode}
             className="p-2 hover:bg-gray-100 rounded-md transition"
@@ -402,6 +457,158 @@ function Dashboard({ user, onLogout }) {
       </div>
     </header>
   );
+
+  const SortableAlertCard = ({ alert }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ 
+      id: alert.id,
+      data: { status: alert.status || "New" }
+    });
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.5 : 1,
+    };
+
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        {...attributes}
+        {...listeners}
+        className="bg-white rounded-lg border border-gray-200 p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition"
+      >
+        <div className="flex justify-between items-start mb-2">
+          <h4 className="text-sm font-medium text-gray-900">{alert.tracker_name || "Unknown"}</h4>
+          <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">
+            {alert.alert_type}
+          </span>
+        </div>
+        <p className="text-xs text-gray-600 mb-1">{alert.location}</p>
+        <p className="text-xs text-gray-500">{new Date(alert.alert_time).toLocaleString()}</p>
+      </div>
+    );
+  };
+
+  const DroppableColumn = ({ status, children, colorClass, count }) => {
+    const { setNodeRef } = useDroppable({
+      id: status,
+      data: { status }
+    });
+
+    return (
+      <div
+        ref={setNodeRef}
+        className={`rounded-lg border-2 p-4 min-h-[500px] ${colorClass}`}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-gray-900">{status}</h3>
+          <span className="text-xs px-2 py-1 bg-white rounded-full border border-gray-300 font-medium">
+            {count}
+          </span>
+        </div>
+        {children}
+      </div>
+    );
+  };
+
+  const KanbanView = () => {
+    const statuses = ["New", "In Progress", "Resolved", "Closed"];
+    const sensors = useSensors(
+      useSensor(PointerSensor),
+      useSensor(KeyboardSensor, {
+        coordinateGetter: sortableKeyboardCoordinates,
+      })
+    );
+
+    const alertsByStatus = useMemo(() => {
+      const grouped = {
+        "New": [],
+        "In Progress": [],
+        "Resolved": [],
+        "Closed": []
+      };
+      
+      alerts.forEach(alert => {
+        const status = alert.status || "New";
+        if (grouped[status]) {
+          grouped[status].push(alert);
+        }
+      });
+      
+      return grouped;
+    }, [alerts]);
+
+    const handleDragEnd = (event) => {
+      const { active, over } = event;
+      
+      if (!over) return;
+      
+      const activeAlert = alerts.find(a => a.id === active.id);
+      if (!activeAlert) return;
+      
+      let newStatus = over.data?.current?.status || over.id;
+      
+      const currentStatus = activeAlert.status || "New";
+      
+      if (statuses.includes(newStatus) && currentStatus !== newStatus) {
+        updateAlertStatus(activeAlert.id, newStatus);
+      }
+    };
+
+    const getStatusColor = (status) => {
+      switch (status) {
+        case "New": return "bg-blue-50 border-blue-200";
+        case "In Progress": return "bg-yellow-50 border-yellow-200";
+        case "Resolved": return "bg-green-50 border-green-200";
+        case "Closed": return "bg-gray-50 border-gray-300";
+        default: return "bg-gray-50 border-gray-200";
+      }
+    };
+
+    return (
+      <div className="p-6">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {statuses.map((status) => (
+              <DroppableColumn
+                key={status}
+                status={status}
+                colorClass={getStatusColor(status)}
+                count={alertsByStatus[status].length}
+              >
+                <SortableContext
+                  id={status}
+                  items={alertsByStatus[status].map(a => a.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-2">
+                    {alertsByStatus[status].map((alert) => (
+                      <SortableAlertCard key={alert.id} alert={alert} />
+                    ))}
+                    {alertsByStatus[status].length === 0 && (
+                      <p className="text-xs text-gray-400 text-center py-8">Drop alerts here</p>
+                    )}
+                  </div>
+                </SortableContext>
+              </DroppableColumn>
+            ))}
+          </div>
+        </DndContext>
+      </div>
+    );
+  };
 
   const DashboardPage = () => {
     const getSeverityBadge = (severity) => {
@@ -494,7 +701,10 @@ function Dashboard({ user, onLogout }) {
           </div>
         )}
 
-        <div className="bg-white rounded-lg border border-gray-200">
+        {viewMode === "kanban" ? (
+          <KanbanView />
+        ) : (
+          <div className="bg-white rounded-lg border border-gray-200">
           <div className="border-b border-gray-200 px-6 py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -655,6 +865,7 @@ function Dashboard({ user, onLogout }) {
             </div>
           </div>
         </div>
+        )}
       </div>
     );
   };
