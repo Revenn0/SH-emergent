@@ -236,7 +236,7 @@ async def auth_callback(code: str, state: str, response: Response):
     
     await db.user_sessions.insert_one(session.dict())
     
-    response = RedirectResponse(url=f"{FRONTEND_URL}/dashboard")
+    response = RedirectResponse(url=FRONTEND_URL)
     response.set_cookie(
         key="session_token",
         value=session_token,
