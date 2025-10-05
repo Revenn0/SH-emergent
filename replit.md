@@ -16,23 +16,56 @@ The system parses tracker emails to extract essential information like alert typ
 ## Features
 
 ### 1. Login System
+- Clean, minimal design matching provided screenshot
 - Simple username/password authentication
-- Clean, modern login page design
-- Credentials: `admin` / `admin`
+- Credentials displayed on login page: `admin` / `admin`
+- Bike icon for branding
 
 ### 2. Dashboard with Sidebar
 - Collapsible sidebar navigation
 - Three main pages:
-  - **Dashboard**: View all alerts with statistics
-  - **Admin Panel**: Control sync settings
-  - **Settings**: Configure Gmail connection
+  - **Bike Tracker**: View all alerts grouped by motorcycle
+  - **Admin Dashboard**: System health and sync settings
+  - **Service Tracker**: Gmail configuration
 
-### 3. Email Filtering
+### 3. Alert Grouping & Priority System
+- **Alerts grouped by motorcycle** (tracker_name)
+- **Badge system**: Shows 1, 2, 3, or 3+ alerts per bike
+- **Super Important Category**: Motorcycles with 2+ different alerts
+- **Color-coded severity**:
+  - Red: Super Important (2+ alerts)
+  - Orange: High Priority (critical alert types)
+  - Blue: Normal priority
+
+### 4. Status Cards Dashboard
+Shows real-time system status:
+- **Total Alerts**: All filtered alerts
+- **Unread**: Alerts requiring attention
+- **High Priority**: Bikes with multiple alerts
+- **Acknowledged**: Read alerts
+
+### 5. Admin Dashboard
+System health monitoring:
+- **System Status**: Application health
+- **Database**: PostgreSQL connection status
+- **Gmail Integration**: Email sync status
+- **Activity Summary**: 24h statistics
+
+### 6. Alert Details Modal
+Click any alert to view:
+- Full alert information
+- Location with Google Maps link
+- Coordinates (latitude/longitude)
+- Device serial number
+- Account information
+- All alerts for that motorcycle
+
+### 7. Email Filtering
 - **Only reads emails from**: `alerts-no-reply@tracking-update.com`
 - Uses IMAP search filter for efficiency
 - Automatic deduplication (won't read same email twice)
 
-### 4. Tracker Alert Categories
+### 8. Tracker Alert Categories
 The system categorizes alerts into 14 types:
 - Heavy Impact
 - Light Sensor
@@ -49,32 +82,21 @@ The system categorizes alerts into 14 types:
 - Pressure
 - Humidity
 
-### 5. Email Parsing
+### 9. Email Parsing
 Extracts important information from tracker emails:
 - **Alert Type**: Type of alert triggered
 - **Time**: When the alert occurred
 - **Location**: Full address
 - **Coordinates**: Latitude and Longitude
 - **Device Serial Number**: Tracker device ID
-- **Tracker Name**: Vehicle/motorcycle identifier
+- **Tracker Name**: Vehicle/motorcycle identifier (plate)
 - **Account Name**: Owner account
 
-### 6. Admin Panel
-Control sync behavior:
-- **Sync Interval**: How often to check for new emails (in minutes)
-- **Email Limit**: Maximum emails to fetch per sync (1-200)
-
-### 7. Alert Management
-- View all alerts in organized cards
+### 10. Alert Management
+- View alerts in professional table format
 - Delete alerts from app (doesn't delete from Gmail)
-- Color-coded categories
-- Sortable by date
-
-### 8. Gmail Settings
-- Dedicated Settings page for Gmail configuration
-- Connect/Disconnect Gmail
-- Secure app password storage
-- Connection status indicator
+- Click to view detailed modal popup
+- Sort and filter capabilities
 
 ## Architecture
 
@@ -86,13 +108,16 @@ Control sync behavior:
 - Email parser using regex patterns
 - Alert categorization engine
 - IMAP client for Gmail
+- Grouping logic for motorcycle alerts
 
 ### Frontend (Port 5000)
 - React single-page application
 - Responsive design with Tailwind CSS
 - Lucide React icons
-- Three main views: Dashboard, Admin, Settings
+- Three main views: Bike Tracker, Admin Dashboard, Settings
 - Local storage for session management
+- Modal popup for detailed alert view
+- Alert grouping by motorcycle
 
 ## Database Schema
 
@@ -132,7 +157,7 @@ Both workflows start automatically:
    - Password: `admin`
 
 ### 5. Connect Gmail
-1. Navigate to **Settings** page
+1. Navigate to **Service Tracker** (Settings) page
 2. Generate a Gmail App Password:
    - Go to myaccount.google.com/security
    - Enable 2-factor authentication
@@ -142,14 +167,15 @@ Both workflows start automatically:
 4. Click "Connect Gmail"
 
 ### 6. Sync Alerts
-1. Go to **Dashboard**
-2. Click "Sync Now"
-3. Alerts will be fetched and displayed
+1. Go to **Bike Tracker** (Dashboard)
+2. Click "Refresh Alerts"
+3. Alerts will be fetched, grouped, and displayed
 
-### 7. Admin Controls (Optional)
-1. Go to **Admin Panel**
-2. Adjust sync interval and email limit
-3. Save settings
+### 7. View Alert Details
+1. Click on any row in the alerts table
+2. Modal popup shows all details
+3. View location on Google Maps
+4. See all alerts for that motorcycle
 
 ## Project Structure
 
@@ -177,7 +203,7 @@ Both workflows start automatically:
 - `DELETE /api/gmail/disconnect` - Disconnect Gmail
 
 ### Alerts
-- `GET /api/alerts/list` - Get all alerts and statistics
+- `GET /api/alerts/list` - Get all alerts, stats, and grouping info
 - `POST /api/alerts/sync` - Sync new alerts from Gmail
 - `DELETE /api/alerts/{id}` - Delete alert from app
 
@@ -199,6 +225,37 @@ Your device has detected the following event…
 ```
 
 The parser extracts each field and stores it in the database for easy viewing.
+
+## Priority & Grouping System
+
+### How it Works:
+1. Alerts are grouped by `tracker_name` (motorcycle plate)
+2. Badge shows number of alerts: 1, 2, 3, or 3+
+3. Motorcycles with 2+ different alerts = **Super Important**
+4. Table sorted by priority (Super Important first)
+5. Color coding:
+   - **Red**: Super Important (2+ alerts)
+   - **Orange**: High Priority (critical types)
+   - **Blue**: Normal
+
+### Super Important Logic:
+```javascript
+if (motorcycle has >= 2 different alerts) {
+  severity = "super-important"
+  badge = red
+  sort to top
+}
+```
+
+## UI/UX Design Principles
+
+Following best practices from screenshot references:
+- **Minimal color palette**: Gray scale with accent colors
+- **Clean typography**: System fonts, clear hierarchy
+- **Consistent spacing**: 4, 8, 16, 24px grid
+- **Professional table design**: Borders, hover states
+- **Status indicators**: Color-coded for quick scanning
+- **Responsive layout**: Works on all screen sizes
 
 ## Deployment
 
@@ -239,26 +296,30 @@ To deploy:
 - Confirm emails are from alerts-no-reply@tracking-update.com
 
 ### No Alerts Showing
-- Click "Sync Now" to fetch emails
+- Click "Refresh Alerts" to fetch emails
 - Check that Gmail is connected in Settings
 - Verify emails exist from tracker sender
 - Review backend logs for sync errors
 
+### Modal Not Opening
+- Check browser console for JavaScript errors
+- Verify alert grouping is working correctly
+- Test with different browsers
+
 ## Recent Changes
 
-- **2025-10-05**: Complete System Redesign
-  - Removed generic email categorization
-  - Implemented motorcycle tracker alert system
-  - Added login page (admin/admin)
-  - Created dashboard with sidebar layout
-  - Added email filtering for alerts-no-reply@tracking-update.com only
-  - Implemented 14 tracker alert categories
-  - Built email parser to extract alert details
-  - Created admin panel for sync controls
-  - Added delete functionality (app-only, doesn't affect Gmail)
-  - Moved Gmail settings to dedicated Settings page
+- **2025-10-05**: Complete UI/UX Redesign
+  - Redesigned login to match screenshot (minimal design with bike icon)
+  - Created status cards dashboard (System, Database, Gmail, Alerts)
+  - Implemented alert grouping by motorcycle (tracker_name)
+  - Added badge system (1, 2, 3, 3+ alerts per bike)
+  - Created "Super Important" category for bikes with 2+ alerts
+  - Built professional table layout matching screenshot design
+  - Implemented modal popup for detailed alert information
+  - Added Google Maps integration for locations
+  - Reorganized sidebar (Bike Tracker, Admin Dashboard, Service Tracker)
+  - Applied clean, minimal color scheme (gray scale + accents)
   - Removed "Made with Emergent" footer
-  - Used Lucide React icons for modern UI
 
 ## User Preferences
 
