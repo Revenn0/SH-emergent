@@ -137,7 +137,7 @@ backend:
         
   - task: "Email Sync and Categorization with Gemini"
     implemented: true
-    working: false
+    working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
@@ -149,6 +149,9 @@ backend:
       - working: false
         agent: "testing"
         comment: "❌ Gemini AI integration has API key configuration issue. Error: '403 Requests from referer <empty> are blocked. API_KEY_HTTP_REFERRER_BLOCKED'. The API key has HTTP referrer restrictions that block server-side requests. Code structure is correct but API key needs to be reconfigured without referrer restrictions for server-side use."
+      - working: true
+        agent: "testing"
+        comment: "✅ Gemini AI integration now working perfectly! Updated API key (AIzaSyDWpJiSr3Y8J4b-R6IlKeRyuK3FJNHB280) and model (gemini-2.5-flash) resolved the 403 error. Successfully tested categorization with multiple email types: promotional emails → Promotions, order updates → Updates, social notifications → Social, personal emails → Primary, suspicious emails → Spam. All categorization logic working correctly."
         
   - task: "Dashboard Stats API"
     implemented: true
