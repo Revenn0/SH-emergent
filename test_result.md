@@ -219,5 +219,7 @@ test_plan:
 agent_communication:
   - agent: "main"
     message: "Initial implementation complete. All backend endpoints created: auth (login, session, me, logout), gmail (connect, sync, disconnect), dashboard stats. Gemini AI key configured. Please test all backend functionality including auth flow, IMAP connection, email sync with AI categorization, and dashboard stats endpoint."
+  - agent: "main"
+    message: "Fixed Gemini API key - updated to unrestricted key and changed model from 'gemini-pro' to 'gemini-2.5-flash'. API tested and working. Ready for full backend retest."
   - agent: "testing"
     message: "Backend testing completed. CRITICAL ISSUE: Gemini API key has HTTP referrer restrictions blocking server-side requests (403 API_KEY_HTTP_REFERRER_BLOCKED). All other backend functionality working correctly - auth flow, Gmail endpoints, dashboard stats. Need to reconfigure Gemini API key without referrer restrictions for server-side use."
