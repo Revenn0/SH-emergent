@@ -2,6 +2,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 import asyncpg
 import os
 import logging
@@ -64,6 +65,18 @@ class ConnectGmailRequest(BaseModel):
 
 class SyncRequest(BaseModel):
     limit: int = 50
+
+class AcknowledgeRequest(BaseModel):
+    acknowledged_by: str
+
+class UpdateStatusRequest(BaseModel):
+    status: str
+
+class AddNoteRequest(BaseModel):
+    notes: str
+
+class AssignRequest(BaseModel):
+    assigned_to: str
 
 
 def parse_tracker_email(body: str) -> dict:
@@ -190,7 +203,25 @@ async def startup_db():
                 account_name VARCHAR,
                 raw_body TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                status VARCHAR DEFAULT 'New',
+                acknowledged BOOLEAN DEFAULT FALSE,
+                acknowledged_at TIMESTAMP,
+                acknowledged_by VARCHAR,
+                notes TEXT,
+                assigned_to VARCHAR,
+                favorite BOOLEAN DEFAULT FALSE,
                 UNIQUE(user_id, email_id)
+            )
+            """
+        )
+        
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS sync_checkpoints (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR NOT NULL UNIQUE,
+                last_email_id VARCHAR,
+                last_sync_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
@@ -342,7 +373,7 @@ async def process_email_batch(email_data_list: List[tuple], conn):
 
 @api_router.post("/alerts/sync")
 async def sync_alerts(request: SyncRequest):
-    """Fetch and categorize tracker alerts from Gmail with parallel processing"""
+    """Fetch and categorize tracker alerts from Gmail with parallel processing and checkpoint"""
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
             "SELECT * FROM users WHERE id = $1",
@@ -351,6 +382,11 @@ async def sync_alerts(request: SyncRequest):
         
         if not user or not user['gmail_email'] or not user['gmail_app_password']:
             raise HTTPException(status_code=404, detail="Gmail not connected")
+        
+        checkpoint = await conn.fetchrow(
+            "SELECT * FROM sync_checkpoints WHERE user_id = $1",
+            DEFAULT_USER_ID
+        )
     
     try:
         imap = connect_imap(user['gmail_email'], user['gmail_app_password'])
@@ -359,7 +395,16 @@ async def sync_alerts(request: SyncRequest):
         _, message_numbers = imap.search(None, f'FROM "alerts-no-reply@tracking-update.com"')
         email_ids = message_numbers[0].split()
         
-        email_ids = email_ids[-request.limit:]
+        if checkpoint and checkpoint['last_email_id']:
+            try:
+                last_idx = email_ids.index(checkpoint['last_email_id'].encode())
+                email_ids = email_ids[last_idx + 1:]
+                logger.info(f"Incremental sync: processing {len(email_ids)} new emails since last checkpoint")
+            except ValueError:
+                logger.warning("Checkpoint email not found, processing latest emails")
+                email_ids = email_ids[-request.limit:]
+        else:
+            email_ids = email_ids[-request.limit:]
         
         logger.info(f"Found {len(email_ids)} emails to process")
         
@@ -406,6 +451,19 @@ async def sync_alerts(request: SyncRequest):
                 total_processed += processed
             
             logger.info(f"Successfully processed {total_processed} emails")
+            
+            if email_data_list:
+                last_email_id = email_data_list[-1][0]
+                await conn.execute(
+                    """
+                    INSERT INTO sync_checkpoints (user_id, last_email_id, last_sync_at)
+                    VALUES ($1, $2, CURRENT_TIMESTAMP)
+                    ON CONFLICT (user_id) DO UPDATE
+                    SET last_email_id = $2, last_sync_at = CURRENT_TIMESTAMP
+                    """,
+                    DEFAULT_USER_ID, last_email_id
+                )
+                logger.info(f"Checkpoint saved: {last_email_id}")
             
             return {"success": True, "categorized": total_processed}
         
@@ -487,7 +545,14 @@ async def list_alerts(category: Optional[str] = Query(None)):
                 "longitude": a["longitude"],
                 "device_serial": a["device_serial"],
                 "tracker_name": a["tracker_name"],
-                "account_name": a["account_name"]
+                "account_name": a["account_name"],
+                "status": a.get("status", "New"),
+                "acknowledged": a.get("acknowledged", False),
+                "acknowledged_at": str(a["acknowledged_at"]) if a.get("acknowledged_at") else None,
+                "acknowledged_by": a.get("acknowledged_by"),
+                "notes": a.get("notes"),
+                "assigned_to": a.get("assigned_to"),
+                "favorite": a.get("favorite", False)
             }
             for a in alerts
         ]
@@ -529,7 +594,102 @@ async def delete_alert(alert_id: int):
     return {"success": True}
 
 
+@api_router.post("/alerts/{alert_id}/acknowledge")
+async def acknowledge_alert(alert_id: int, request: AcknowledgeRequest):
+    """Acknowledge an alert"""
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE tracker_alerts 
+            SET acknowledged = TRUE, 
+                acknowledged_at = CURRENT_TIMESTAMP,
+                acknowledged_by = $1
+            WHERE id = $2 AND user_id = $3
+            """,
+            request.acknowledged_by, alert_id, DEFAULT_USER_ID
+        )
+    
+    return {"success": True}
+
+
+@api_router.post("/alerts/{alert_id}/status")
+async def update_alert_status(alert_id: int, request: UpdateStatusRequest):
+    """Update alert status"""
+    valid_statuses = ["New", "In Progress", "Resolved", "Closed"]
+    if request.status not in valid_statuses:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+    
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE tracker_alerts 
+            SET status = $1
+            WHERE id = $2 AND user_id = $3
+            """,
+            request.status, alert_id, DEFAULT_USER_ID
+        )
+    
+    return {"success": True}
+
+
+@api_router.post("/alerts/{alert_id}/notes")
+async def add_alert_note(alert_id: int, request: AddNoteRequest):
+    """Add notes to an alert"""
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE tracker_alerts 
+            SET notes = $1
+            WHERE id = $2 AND user_id = $3
+            """,
+            request.notes, alert_id, DEFAULT_USER_ID
+        )
+    
+    return {"success": True}
+
+
+@api_router.post("/alerts/{alert_id}/assign")
+async def assign_alert(alert_id: int, request: AssignRequest):
+    """Assign alert to a team member"""
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE tracker_alerts 
+            SET assigned_to = $1
+            WHERE id = $2 AND user_id = $3
+            """,
+            request.assigned_to, alert_id, DEFAULT_USER_ID
+        )
+    
+    return {"success": True}
+
+
+@api_router.post("/alerts/{alert_id}/favorite")
+async def toggle_favorite(alert_id: int):
+    """Toggle favorite status"""
+    async with db_pool.acquire() as conn:
+        current = await conn.fetchrow(
+            "SELECT favorite FROM tracker_alerts WHERE id = $1 AND user_id = $2",
+            alert_id, DEFAULT_USER_ID
+        )
+        
+        new_value = not current['favorite'] if current else True
+        
+        await conn.execute(
+            """
+            UPDATE tracker_alerts 
+            SET favorite = $1
+            WHERE id = $2 AND user_id = $3
+            """,
+            new_value, alert_id, DEFAULT_USER_ID
+        )
+    
+    return {"success": True, "favorite": new_value}
+
+
 app.include_router(api_router)
+
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.add_middleware(
     CORSMiddleware,

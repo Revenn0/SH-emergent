@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import "@/App.css";
 import axios from "axios";
 import { 
   Bell, Settings, LayoutDashboard, LogOut, Menu, X, Trash2, 
   AlertTriangle, Database, Mail, Activity, Bike, CheckCircle, 
-  XCircle, Clock, MapPin, Info
+  XCircle, Clock, MapPin, Info, Moon, Sun, Search, Star, UserPlus, 
+  MessageSquare, CheckCircle2
 } from "lucide-react";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -132,10 +133,17 @@ function Dashboard({ user, onLogout }) {
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [autoRefresh, setAutoRefresh] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     loadAlerts();
     loadCategories();
+    const savedDarkMode = localStorage.getItem("darkMode") === "true";
+    setDarkMode(savedDarkMode);
+    if (savedDarkMode) {
+      document.documentElement.classList.add("dark");
+    }
   }, []);
 
   useEffect(() => {
