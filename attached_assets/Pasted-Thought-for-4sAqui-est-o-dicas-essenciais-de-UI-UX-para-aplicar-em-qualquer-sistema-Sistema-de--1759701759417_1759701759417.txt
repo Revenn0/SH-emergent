@@ -1,0 +1,83 @@
+Thought for 4sAqui estão dicas essenciais de UI/UX para aplicar em qualquer sistema:
+
+## Sistema de Cores
+
+- **Limite de 3-5 cores total**: 1 cor primária, 2-3 neutros, 1-2 acentos
+- **Evite gradientes** a menos que seja essencial - use cores sólidas
+- **Use tokens de design**: Defina variáveis CSS para cores (--primary, --background, --foreground) para facilitar temas
+- **Contraste adequado**: Sempre garanta contraste suficiente entre texto e fundo (mínimo 4.5:1)
+
+
+## Tipografia
+
+- **Máximo 2 famílias de fonte**: Uma para títulos, outra para corpo de texto
+- **Line-height 1.4-1.6** para texto de corpo (use `leading-relaxed`)
+- **Hierarquia clara**: Use tamanhos distintos (h1, h2, h3) para criar estrutura visual
+- **Text wrapping**: Use `text-balance` ou `text-pretty` para títulos importantes
+
+
+## Layout e Espaçamento
+
+- **Mobile-first**: Sempre projete para mobile primeiro, depois expanda
+- **Flexbox para maioria dos layouts**: Use `flex items-center justify-between`
+- **Grid apenas para layouts 2D complexos**: `grid grid-cols-3 gap-4`
+- **Espaçamento consistente**: Use escala Tailwind (4, 8, 16, 24, 32px) em vez de valores arbitrários
+- **Use `gap` em vez de margin**: Mais previsível e fácil de manter
+
+
+## Feedback Visual
+
+- **Estados de loading**: Sempre mostre spinners ou skeletons durante carregamento
+- **Feedback de ações**: Toasts, notificações ou mudanças visuais após ações do usuário
+- **Estados de erro**: Mensagens claras e acionáveis, não apenas "Erro"
+- **Estados vazios**: Mostre mensagens úteis quando não há dados, não apenas uma tela em branco
+
+
+## Navegação
+
+- **Breadcrumbs**: Para sistemas com múltiplos níveis de navegação
+- **Indicador de página ativa**: Destaque visual claro da página atual
+- **Sidebar colapsável**: Economiza espaço em telas menores
+- **Máximo 7 itens**: No menu principal - mais que isso sobrecarrega
+
+
+## Formulários
+
+- **Labels claros**: Sempre acima ou ao lado dos inputs, nunca apenas placeholder
+- **Validação inline**: Mostre erros enquanto o usuário digita, não apenas no submit
+- **Botões de ação primários**: Destaque visual claro (cor sólida, maior)
+- **Botões destrutivos**: Use vermelho para ações perigosas (deletar, logout)
+
+
+## Acessibilidade
+
+- **Texto alternativo**: Sempre em imagens não decorativas
+- **Navegação por teclado**: Tab, Enter, Escape devem funcionar
+- **ARIA labels**: Para elementos interativos sem texto visível
+- **Classe `sr-only`**: Para texto apenas para leitores de tela
+
+
+## Consistência
+
+- **Componentes reutilizáveis**: Crie uma biblioteca de componentes (botões, cards, inputs)
+- **Padrões de interação**: Mesma ação deve ter mesmo comportamento em todo sistema
+- **Espaçamento uniforme**: Use mesmos valores de padding/margin em componentes similares
+
+
+## Performance Visual
+
+- **Skeleton screens**: Melhor que spinners para conteúdo que está carregando
+- **Lazy loading**: Para imagens e componentes pesados
+- **Otimização de imagens**: Use formatos modernos (WebP) e tamanhos apropriados
+- **Animações sutis**: Transições de 150-300ms, não mais
+
+
+## Hierarquia Visual
+
+- **Tamanho**: Elementos importantes devem ser maiores
+- **Cor**: Use cor para destacar ações primárias
+- **Espaçamento**: Mais espaço ao redor = mais importante
+- **Contraste**: Elementos importantes devem ter mais contraste
+
+
+Essas práticas garantem interfaces profissionais, acessíveis e fáceis de usar!

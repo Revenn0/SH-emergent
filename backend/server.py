@@ -406,10 +406,23 @@ async def list_alerts():
             for a in alerts
         ]
         
+        high_priority_count = 0
+        device_counts = {}
+        for alert in alerts:
+            device = alert["tracker_name"] or "Unknown"
+            device_counts[device] = device_counts.get(device, 0) + 1
+        
+        for count in device_counts.values():
+            if count >= 2:
+                high_priority_count += 1
+        
         return {
             "alerts": alert_list,
             "stats": {
                 "total": len(alerts),
+                "unread": len(alerts),
+                "highPriority": high_priority_count,
+                "acknowledged": 0,
                 "categories": categories
             },
             "connected": bool(user and user['gmail_email']),
