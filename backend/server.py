@@ -558,14 +558,38 @@ async def list_alerts(category: Optional[str] = Query(None)):
             for a in alerts
         ]
         
-        high_priority_count = 0
-        device_counts = {}
+        over_turn_count = 0
+        no_communication_count = 0
+        heavy_impact_count = 0
+        
+        device_alerts = {}
         for alert in alerts:
             device = alert["tracker_name"] or "Unknown"
-            device_counts[device] = device_counts.get(device, 0) + 1
+            alert_type = alert["alert_type"] or "Other"
+            
+            if device not in device_alerts:
+                device_alerts[device] = set()
+            device_alerts[device].add(alert_type)
+            
+            if alert_type == "Over-turn":
+                over_turn_count += 1
+            elif "No Communication" in alert_type:
+                no_communication_count += 1
+            elif "Heavy Impact" in alert_type:
+                heavy_impact_count += 1
         
-        for count in device_counts.values():
-            if count >= 2:
+        high_priority_count = 0
+        super_important_count = 0
+        
+        for device, alert_types in device_alerts.items():
+            has_light_sensor = "Light Sensor" in alert_types
+            has_over_turn = "Over-turn" in alert_types
+            has_heavy_impact = any("Heavy Impact" in t for t in alert_types)
+            has_no_comm = any("No Communication" in t for t in alert_types)
+            
+            if has_light_sensor and has_over_turn:
+                super_important_count += 1
+            elif has_over_turn or has_heavy_impact or has_no_comm:
                 high_priority_count += 1
         
         return {
@@ -574,7 +598,11 @@ async def list_alerts(category: Optional[str] = Query(None)):
                 "total": len(alert_list),
                 "unread": len(alert_list),
                 "highPriority": high_priority_count,
+                "superImportant": super_important_count,
                 "acknowledged": 0,
+                "overTurn": over_turn_count,
+                "noCommunication": no_communication_count,
+                "heavyImpact": heavy_impact_count,
                 "categories": categories
             },
             "connected": bool(user and user['gmail_email']),

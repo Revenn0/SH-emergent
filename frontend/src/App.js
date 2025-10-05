@@ -214,16 +214,27 @@ function Dashboard({ user, onLogout }) {
     });
 
     Object.values(grouped).forEach(group => {
-      if (group.count >= 2) {
+      const alertTypes = new Set(group.alerts.map(a => a.alert_type));
+      
+      const hasLightSensor = alertTypes.has("Light Sensor");
+      const hasOverTurn = alertTypes.has("Over-turn");
+      const hasHeavyImpact = Array.from(alertTypes).some(t => t && t.includes("Heavy Impact"));
+      const hasNoCommunication = Array.from(alertTypes).some(t => t && t.includes("No Communication"));
+      
+      if (hasLightSensor && hasOverTurn) {
         group.severity = "super-important";
-      } else if (group.alerts.some(a => a.alert_type === "Heavy Impact" || a.alert_type === "Over-turn")) {
+      } else if (hasOverTurn || hasHeavyImpact || hasNoCommunication) {
         group.severity = "high";
+      } else {
+        group.severity = "normal";
       }
     });
 
     setGroupedAlerts(Object.values(grouped).sort((a, b) => {
       if (a.severity === "super-important" && b.severity !== "super-important") return -1;
       if (b.severity === "super-important" && a.severity !== "super-important") return 1;
+      if (a.severity === "high" && b.severity === "normal") return -1;
+      if (b.severity === "high" && a.severity === "normal") return 1;
       return b.count - a.count;
     }));
   };
@@ -420,15 +431,15 @@ function Dashboard({ user, onLogout }) {
             <p className="text-xs text-gray-500 mt-1">Requires attention</p>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white rounded-lg border border-red-200 p-4">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-gray-600">High Priority</p>
-              <AlertTriangle className="w-4 h-4 text-red-500" />
+              <p className="text-xs text-gray-600">Super Important</p>
+              <AlertTriangle className="w-4 h-4 text-red-600" />
             </div>
-            <p className="text-2xl font-semibold text-gray-900">
-              {groupedAlerts.filter(g => g.severity === "super-important").length}
+            <p className="text-2xl font-semibold text-red-700">
+              {stats.superImportant || 0}
             </p>
-            <p className="text-xs text-gray-500 mt-1">Critical alerts</p>
+            <p className="text-xs text-gray-500 mt-1">Light Sensor + Over-turn</p>
           </div>
 
           <div className="bg-white rounded-lg border border-gray-200 p-4">
