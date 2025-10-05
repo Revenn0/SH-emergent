@@ -1,173 +1,264 @@
-# Email Categorizer - Replit Setup
+# Motorcycle Tracker Alert Management System
 
 ## Project Overview
 
-This is an **Email Categorizer** application that uses AI (Google Gemini) to automatically categorize emails from Gmail into different categories:
-- Primary
-- Social
-- Promotions
-- Updates
-- Spam
+This is a **Motorcycle Tracker Alert Management System** that reads tracker alerts exclusively from `alerts-no-reply@tracking-update.com` via Gmail IMAP, categorizes them using AI, and displays them in a modern dashboard with sidebar navigation.
+
+The system parses tracker emails to extract essential information like alert type, location, coordinates, device info, and displays only the most important data in an organized interface.
 
 ### Tech Stack
-- **Backend**: Python FastAPI with PostgreSQL and Google Gemini AI
-- **Frontend**: React with Tailwind CSS
-- **Authentication**: None (no login required)
-- **Email**: Gmail IMAP integration
+- **Backend**: Python FastAPI with PostgreSQL
+- **Frontend**: React with Tailwind CSS and Lucide icons
+- **Authentication**: Simple login (username: admin, password: admin)
+- **Email**: Gmail IMAP integration (filters only tracker alerts)
+- **AI**: Google Gemini for categorization (optional enhancement)
+
+## Features
+
+### 1. Login System
+- Simple username/password authentication
+- Clean, modern login page design
+- Credentials: `admin` / `admin`
+
+### 2. Dashboard with Sidebar
+- Collapsible sidebar navigation
+- Three main pages:
+  - **Dashboard**: View all alerts with statistics
+  - **Admin Panel**: Control sync settings
+  - **Settings**: Configure Gmail connection
+
+### 3. Email Filtering
+- **Only reads emails from**: `alerts-no-reply@tracking-update.com`
+- Uses IMAP search filter for efficiency
+- Automatic deduplication (won't read same email twice)
+
+### 4. Tracker Alert Categories
+The system categorizes alerts into 14 types:
+- Heavy Impact
+- Light Sensor
+- Out Of Country
+- No Communication after 2 days
+- Over-turn
+- Low Battery
+- Motion
+- New Positions
+- High Risk Area
+- Custom GeoFence
+- Rotation Stop
+- Temperature
+- Pressure
+- Humidity
+
+### 5. Email Parsing
+Extracts important information from tracker emails:
+- **Alert Type**: Type of alert triggered
+- **Time**: When the alert occurred
+- **Location**: Full address
+- **Coordinates**: Latitude and Longitude
+- **Device Serial Number**: Tracker device ID
+- **Tracker Name**: Vehicle/motorcycle identifier
+- **Account Name**: Owner account
+
+### 6. Admin Panel
+Control sync behavior:
+- **Sync Interval**: How often to check for new emails (in minutes)
+- **Email Limit**: Maximum emails to fetch per sync (1-200)
+
+### 7. Alert Management
+- View all alerts in organized cards
+- Delete alerts from app (doesn't delete from Gmail)
+- Color-coded categories
+- Sortable by date
+
+### 8. Gmail Settings
+- Dedicated Settings page for Gmail configuration
+- Connect/Disconnect Gmail
+- Secure app password storage
+- Connection status indicator
 
 ## Architecture
 
-The project consists of two main components:
+### Backend (Port 8080)
+- FastAPI REST API
+- PostgreSQL database with two tables:
+  - `users`: User and Gmail configuration
+  - `tracker_alerts`: Parsed alert data
+- Email parser using regex patterns
+- Alert categorization engine
+- IMAP client for Gmail
 
-1. **Backend** (Port 8080):
-   - FastAPI server
-   - PostgreSQL database (Replit native) for storing users, sessions, and categorized emails
-   - Google Gemini AI for email categorization
-   - Gmail IMAP integration for fetching emails
+### Frontend (Port 5000)
+- React single-page application
+- Responsive design with Tailwind CSS
+- Lucide React icons
+- Three main views: Dashboard, Admin, Settings
+- Local storage for session management
 
-2. **Frontend** (Port 5000):
-   - React application with Create React App
-   - Tailwind CSS for styling
-   - Axios for API communication
-   - Proxy configured to communicate with backend
+## Database Schema
 
-## Required Configuration
+### `users` table
+- id (primary key)
+- email, name, picture
+- gmail_email, gmail_app_password
 
-### 1. Database
+### `tracker_alerts` table
+- id (serial, primary key)
+- user_id, email_id (unique combination)
+- alert_type, alert_time, location
+- latitude, longitude
+- device_serial, tracker_name, account_name
+- raw_body, created_at
 
-✅ **Already Configured!** PostgreSQL database is automatically set up by Replit with environment variable `DATABASE_URL`.
+## Setup Instructions
 
-### 2. Google Gemini API Key
-
-Get your API key from [Google AI Studio](https://makersuite.google.com/app/apikey) and update `backend/.env`:
-
+### 1. Environment Variables
+The Gemini API key is configured in `backend/.env`:
 ```
-GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_API_KEY=AIzaSyDWpJiSr3Y8J4b-R6IlKeRyuK3FJNHB280
 ```
 
-### 3. Frontend URL
+### 2. Database
+✅ PostgreSQL is automatically configured via `DATABASE_URL` environment variable
 
-✅ **Already Configured!** Set to: `https://c363f9ef-5f69-4abe-887f-60d877a4e2ce-00-25ix68esofxzf.riker.replit.dev`
+### 3. Start the Application
+Both workflows start automatically:
+- **Backend**: Python FastAPI on port 8080
+- **Frontend**: React dev server on port 5000
 
-## How to Use
+### 4. Login
+1. Open the web preview
+2. Login with:
+   - Username: `admin`
+   - Password: `admin`
 
-1. **Configure Environment Variables**: The Gemini API key is already configured in `backend/.env`
+### 5. Connect Gmail
+1. Navigate to **Settings** page
+2. Generate a Gmail App Password:
+   - Go to myaccount.google.com/security
+   - Enable 2-factor authentication
+   - Search for "App passwords"
+   - Generate password for "Mail"
+3. Enter Gmail address and app password
+4. Click "Connect Gmail"
 
-2. **Start the Application**: The workflows will start automatically
-   - Frontend will be available on port 5000
-   - Backend will be available on port 8080 (internal)
+### 6. Sync Alerts
+1. Go to **Dashboard**
+2. Click "Sync Now"
+3. Alerts will be fetched and displayed
 
-3. **Access the App**: Open the web preview in Replit - the dashboard opens automatically
-
-4. **Connect Gmail**:
-   - Generate a Gmail App Password:
-     - Go to myaccount.google.com/security
-     - Enable 2-factor authentication
-     - Search for "App passwords"
-     - Generate a new password for "Mail"
-   - Enter your Gmail address and app password in the app
-
-5. **Sync Emails**: Click "Sincronizar" to fetch and categorize your emails
+### 7. Admin Controls (Optional)
+1. Go to **Admin Panel**
+2. Adjust sync interval and email limit
+3. Save settings
 
 ## Project Structure
 
 ```
 ├── backend/
 │   ├── server.py          # FastAPI application
-│   ├── .env               # Environment variables (needs configuration)
+│   ├── .env               # Environment variables
 │   └── requirements.txt   # Python dependencies
 ├── frontend/
 │   ├── src/
-│   │   ├── App.js        # Main React component
-│   │   └── components/   # UI components (shadcn/ui)
-│   ├── package.json      # Node dependencies and proxy config
-│   ├── craco.config.js   # Webpack configuration
-│   └── .env              # Frontend environment variables
+│   │   └── App.js        # Main React application
+│   ├── package.json      # Node dependencies
+│   └── public/
+│       └── index.html    # HTML template
 └── replit.md             # This file
-
 ```
 
-## Important Notes
+## API Endpoints
 
-### Workflows
+### Authentication
+- `POST /api/auth/login` - Login with username/password
 
-- **Frontend**: Runs on port 5000 (public)
-- **Backend**: Runs on port 8080 (internal, proxied through frontend)
+### Gmail
+- `POST /api/gmail/connect` - Connect Gmail account
+- `DELETE /api/gmail/disconnect` - Disconnect Gmail
 
-### Special Configuration
+### Alerts
+- `GET /api/alerts/list` - Get all alerts and statistics
+- `POST /api/alerts/sync` - Sync new alerts from Gmail
+- `DELETE /api/alerts/{id}` - Delete alert from app
 
-The backend workflow includes a special `LD_LIBRARY_PATH` configuration to support the grpcio library required by Google Gemini:
+## Email Parser
 
-```bash
-export LD_LIBRARY_PATH=/nix/store/.../gcc-lib/lib:$LD_LIBRARY_PATH
+The system uses regex patterns to extract data from tracker emails:
+
+Example tracker email format:
+```
+Dear user,
+Your device has detected the following event…
+ - Alert type: Notify On Light Sensor
+ - Time: 2025-10-03 12:05:55 (UTC)
+ - Location: Runnymede Road, Surrey, Egham, England
+ - Latitude, Longitude: 51.4355838, -0.540028
+ - Device Serial Number: 867684070096659
+ - Tracker Name: EY70TWF
+ - Account name: 4th Dimension Innovation
 ```
 
-This is necessary for the grpcio C extension to find the required C++ standard library.
-
-### CORS Configuration
-
-The backend is configured to allow requests from:
-- localhost (development)
-- Replit domains
-
-### Proxy Configuration
-
-The frontend uses Create React App's proxy feature to forward API requests to the backend:
-- Frontend makes requests to `/api/*`
-- Webpack dev server forwards them to `http://localhost:8080/api/*`
+The parser extracts each field and stores it in the database for easy viewing.
 
 ## Deployment
 
-The deployment is configured to use a VM (always-on) deployment since:
-- The application needs to maintain connections to MongoDB
-- Background email sync operations require persistent state
-- Authentication sessions need to be maintained
+The app is configured for VM deployment (always-on) since it:
+- Maintains database connections
+- Requires persistent state
+- May implement background sync in future
 
 To deploy:
-1. Make sure all environment variables are configured
-2. Click the "Publish" button in Replit
-3. The app will be deployed with both frontend and backend running
+1. Ensure all environment variables are set
+2. Click "Publish" in Replit
+3. App will be deployed with both services running
 
 ## Security Notes
 
-⚠️ **Important Security Considerations:**
-
-1. **Gmail App Passwords**: The app currently stores Gmail app passwords in the database. In production, these should be encrypted.
-
-2. **Environment Variables**: Never commit the `.env` files with real credentials to git. They are already in `.gitignore`.
-
-3. **CORS**: The CORS configuration should be restricted to your specific domains in production.
-
-4. **Session Management**: Sessions expire after 7 days by default.
+⚠️ **Important:**
+1. Gmail app passwords are stored in database (should be encrypted in production)
+2. Login credentials are hardcoded (should use proper auth in production)
+3. Change default admin credentials for production use
+4. CORS is configured for Replit domains only
 
 ## Troubleshooting
 
 ### Backend Won't Start
-- Check that MongoDB URL is valid and accessible
-- Verify Gemini API key is correct
-- Check backend logs for detailed error messages
+- Check DATABASE_URL is valid
+- Verify Python dependencies are installed
+- Check backend logs for errors
 
-### Frontend Can't Connect to Backend
-- Verify the proxy is configured in `frontend/package.json`
-- Check that backend is running on port 8080
-- Review browser console for CORS errors
+### Frontend Can't Connect
+- Verify backend is running on port 8080
+- Check proxy configuration in package.json
+- Review browser console for errors
 
 ### Email Sync Fails
 - Verify Gmail app password is correct
-- Check that 2-factor authentication is enabled on Gmail
-- Ensure IMAP is enabled in Gmail settings
+- Ensure 2-factor auth is enabled on Gmail
+- Check that IMAP is enabled in Gmail settings
+- Confirm emails are from alerts-no-reply@tracking-update.com
+
+### No Alerts Showing
+- Click "Sync Now" to fetch emails
+- Check that Gmail is connected in Settings
+- Verify emails exist from tracker sender
+- Review backend logs for sync errors
 
 ## Recent Changes
 
-- **2025-10-05**: Removed Authentication & Simplified App
-  - Removed all authentication - app opens directly to dashboard
-  - No login required - immediate access to Gmail connection
-  - Migrated from MongoDB to PostgreSQL (Replit native database)
-  - Configured workflows for frontend and backend
-  - Added grpcio library support with LD_LIBRARY_PATH fix
-  - Configured proxy for frontend-backend communication
-  - Set up CORS for Replit domains
-  - All environment variables auto-configured (DATABASE_URL)
+- **2025-10-05**: Complete System Redesign
+  - Removed generic email categorization
+  - Implemented motorcycle tracker alert system
+  - Added login page (admin/admin)
+  - Created dashboard with sidebar layout
+  - Added email filtering for alerts-no-reply@tracking-update.com only
+  - Implemented 14 tracker alert categories
+  - Built email parser to extract alert details
+  - Created admin panel for sync controls
+  - Added delete functionality (app-only, doesn't affect Gmail)
+  - Moved Gmail settings to dedicated Settings page
+  - Removed "Made with Emergent" footer
+  - Used Lucide React icons for modern UI
 
 ## User Preferences
 
