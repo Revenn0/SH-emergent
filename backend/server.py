@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -14,6 +14,8 @@ import email
 from email.header import decode_header
 import google.generativeai as genai
 import re
+import asyncio
+from functools import lru_cache
 
 
 ROOT_DIR = Path(__file__).parent
@@ -32,6 +34,24 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 DEFAULT_USER_ID = "default"
+
+ALERT_CATEGORIES = [
+    "Heavy Impact",
+    "Light Sensor",
+    "Out Of Country",
+    "No Communication",
+    "Over-turn",
+    "Low Battery",
+    "Motion",
+    "New Positions",
+    "High Risk Area",
+    "Custom GeoFence",
+    "Rotation Stop",
+    "Temperature",
+    "Pressure",
+    "Humidity",
+    "Other"
+]
 
 
 class LoginRequest(BaseModel):
@@ -287,9 +307,42 @@ async def disconnect_gmail():
     return {"success": True}
 
 
+async def process_email_batch(email_data_list: List[tuple], conn):
+    """Process a batch of emails in parallel"""
+    async def process_single_email(email_id_str, body):
+        try:
+            parsed = parse_tracker_email(body)
+            category = categorize_alert(parsed["alert_type"])
+            
+            await conn.execute(
+                """
+                INSERT INTO tracker_alerts (
+                    user_id, email_id, alert_type, alert_time, location, 
+                    latitude, longitude, device_serial, tracker_name, 
+                    account_name, raw_body
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                ON CONFLICT (user_id, email_id) DO NOTHING
+                """,
+                DEFAULT_USER_ID, email_id_str, category, 
+                parsed["time"], parsed["location"], 
+                parsed["latitude"], parsed["longitude"],
+                parsed["device_serial"], parsed["tracker_name"],
+                parsed["account_name"], body[:500]
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Error processing email {email_id_str}: {str(e)}")
+            return False
+    
+    tasks = [process_single_email(email_id, body) for email_id, body in email_data_list]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    return sum(1 for r in results if r is True)
+
+
 @api_router.post("/alerts/sync")
 async def sync_alerts(request: SyncRequest):
-    """Fetch and categorize tracker alerts from Gmail"""
+    """Fetch and categorize tracker alerts from Gmail with parallel processing"""
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
             "SELECT * FROM users WHERE id = $1",
@@ -308,83 +361,116 @@ async def sync_alerts(request: SyncRequest):
         
         email_ids = email_ids[-request.limit:]
         
-        categorized_count = 0
+        logger.info(f"Found {len(email_ids)} emails to process")
         
         async with db_pool.acquire() as conn:
+            existing_ids = await conn.fetch(
+                """
+                SELECT email_id FROM tracker_alerts 
+                WHERE user_id = $1
+                """,
+                DEFAULT_USER_ID
+            )
+            existing_set = {row['email_id'] for row in existing_ids}
+            
+            email_data_list = []
             for email_id in email_ids:
+                email_id_str = email_id.decode()
+                
+                if email_id_str in existing_set:
+                    continue
+                
                 try:
-                    email_id_str = email_id.decode()
-                    
-                    existing = await conn.fetchrow(
-                        """
-                        SELECT id FROM tracker_alerts 
-                        WHERE user_id = $1 AND email_id = $2
-                        LIMIT 1
-                        """,
-                        DEFAULT_USER_ID, email_id_str
-                    )
-                    
-                    if existing:
-                        continue
-                    
                     _, msg_data = imap.fetch(email_id, "(RFC822)")
                     email_body = msg_data[0][1]
                     msg = email.message_from_bytes(email_body)
-                    
                     body = get_email_body(msg)
                     
-                    parsed = parse_tracker_email(body)
-                    
-                    category = categorize_alert(parsed["alert_type"])
-                    
-                    await conn.execute(
-                        """
-                        INSERT INTO tracker_alerts (
-                            user_id, email_id, alert_type, alert_time, location, 
-                            latitude, longitude, device_serial, tracker_name, 
-                            account_name, raw_body
-                        )
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-                        """,
-                        DEFAULT_USER_ID, email_id_str, category, 
-                        parsed["time"], parsed["location"], 
-                        parsed["latitude"], parsed["longitude"],
-                        parsed["device_serial"], parsed["tracker_name"],
-                        parsed["account_name"], body[:500]
-                    )
-                    
-                    categorized_count += 1
-                    
+                    email_data_list.append((email_id_str, body))
                 except Exception as e:
-                    logger.error(f"Error processing email {email_id}: {str(e)}")
-                    continue
-        
-        imap.logout()
-        
-        return {"success": True, "categorized": categorized_count}
+                    logger.error(f"Error fetching email {email_id_str}: {str(e)}")
+            
+            imap.logout()
+            
+            if not email_data_list:
+                return {"success": True, "categorized": 0, "message": "No new emails to process"}
+            
+            logger.info(f"Processing {len(email_data_list)} new emails in parallel")
+            
+            batch_size = 10
+            total_processed = 0
+            
+            for i in range(0, len(email_data_list), batch_size):
+                batch = email_data_list[i:i + batch_size]
+                processed = await process_email_batch(batch, conn)
+                total_processed += processed
+            
+            logger.info(f"Successfully processed {total_processed} emails")
+            
+            return {"success": True, "categorized": total_processed}
         
     except Exception as e:
         logger.error(f"Sync error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
 
 
+@api_router.get("/alerts/categories")
+async def get_categories():
+    """Get all available alert categories"""
+    async with db_pool.acquire() as conn:
+        alerts = await conn.fetch(
+            """
+            SELECT alert_type, COUNT(*) as count 
+            FROM tracker_alerts 
+            WHERE user_id = $1 
+            GROUP BY alert_type
+            ORDER BY count DESC
+            """,
+            DEFAULT_USER_ID
+        )
+        
+        category_stats = {
+            cat: 0 for cat in ALERT_CATEGORIES
+        }
+        
+        for alert in alerts:
+            cat = alert["alert_type"] or "Other"
+            if cat in category_stats:
+                category_stats[cat] = alert["count"]
+        
+        return {
+            "categories": ALERT_CATEGORIES,
+            "stats": category_stats
+        }
+
+
 @api_router.get("/alerts/list")
-async def list_alerts():
-    """Get all tracker alerts"""
+async def list_alerts(category: Optional[str] = Query(None)):
+    """Get all tracker alerts with optional category filter"""
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
             "SELECT * FROM users WHERE id = $1",
             DEFAULT_USER_ID
         )
         
-        alerts = await conn.fetch(
-            """
-            SELECT * FROM tracker_alerts 
-            WHERE user_id = $1 
-            ORDER BY created_at DESC
-            """,
-            DEFAULT_USER_ID
-        )
+        if category and category != "All":
+            alerts = await conn.fetch(
+                """
+                SELECT * FROM tracker_alerts 
+                WHERE user_id = $1 AND alert_type = $2
+                ORDER BY created_at DESC
+                """,
+                DEFAULT_USER_ID, category
+            )
+        else:
+            alerts = await conn.fetch(
+                """
+                SELECT * FROM tracker_alerts 
+                WHERE user_id = $1 
+                ORDER BY created_at DESC
+                """,
+                DEFAULT_USER_ID
+            )
         
         categories = {}
         for alert in alerts:
@@ -419,14 +505,15 @@ async def list_alerts():
         return {
             "alerts": alert_list,
             "stats": {
-                "total": len(alerts),
-                "unread": len(alerts),
+                "total": len(alert_list),
+                "unread": len(alert_list),
                 "highPriority": high_priority_count,
                 "acknowledged": 0,
                 "categories": categories
             },
             "connected": bool(user and user['gmail_email']),
-            "email": user['gmail_email'] if user else None
+            "email": user['gmail_email'] if user else None,
+            "activeFilter": category or "All"
         }
 
 

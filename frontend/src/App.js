@@ -129,13 +129,51 @@ function Dashboard({ user, onLogout }) {
   const [syncInterval, setSyncInterval] = useState(5);
   const [emailLimit, setEmailLimit] = useState(50);
 
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [autoRefresh, setAutoRefresh] = useState(false);
+
   useEffect(() => {
     loadAlerts();
+    loadCategories();
   }, []);
 
-  const loadAlerts = async () => {
+  useEffect(() => {
+    if (selectedCategory !== "All") {
+      loadAlerts(selectedCategory);
+    } else {
+      loadAlerts();
+    }
+  }, [selectedCategory]);
+
+  useEffect(() => {
+    let interval;
+    if (autoRefresh && gmailConnected) {
+      interval = setInterval(() => {
+        loadAlerts(selectedCategory !== "All" ? selectedCategory : null);
+      }, 30000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [autoRefresh, gmailConnected, selectedCategory]);
+
+  const loadCategories = async () => {
     try {
-      const response = await api.get("/alerts/list");
+      const response = await api.get("/alerts/categories");
+      setCategories(["All", ...response.data.categories]);
+    } catch (error) {
+      console.error("Failed to load categories:", error);
+    }
+  };
+
+  const loadAlerts = async (category = null) => {
+    try {
+      const url = category && category !== "All" 
+        ? `/alerts/list?category=${encodeURIComponent(category)}`
+        : "/alerts/list";
+      
+      const response = await api.get(url);
       setAlerts(response.data.alerts);
       setStats(response.data.stats);
       setGmailConnected(response.data.connected);
@@ -385,22 +423,50 @@ function Dashboard({ user, onLogout }) {
 
         <div className="bg-white rounded-lg border border-gray-200">
           <div className="border-b border-gray-200 px-6 py-3">
-            <div className="flex items-center space-x-4">
-              <button className="px-3 py-1 text-sm font-medium text-gray-900 border-b-2 border-gray-900">
-                All Devices
-              </button>
-              <button className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900">
-                Protect Devices
-              </button>
-              <button className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900">
-                GPS Devices
-              </button>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <label className="text-xs font-medium text-gray-600">Filter by Category:</label>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
+                >
+                  {categories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+                {selectedCategory !== "All" && (
+                  <button
+                    onClick={() => setSelectedCategory("All")}
+                    className="text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    Clear filter
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center space-x-2">
+                <label className="flex items-center space-x-2 text-xs text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={autoRefresh}
+                    onChange={(e) => setAutoRefresh(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <span>Auto-refresh (30s)</span>
+                </label>
+              </div>
             </div>
           </div>
 
           <div className="p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-1">All Alerts</h3>
-            <p className="text-xs text-gray-500 mb-4">Latest alerts from all devices</p>
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">
+              {selectedCategory === "All" ? "All Alerts" : `${selectedCategory} Alerts`}
+            </h3>
+            <p className="text-xs text-gray-500 mb-4">
+              {selectedCategory === "All" 
+                ? "Latest alerts from all devices" 
+                : `Showing ${stats.total} ${selectedCategory} alert${stats.total !== 1 ? 's' : ''}`}
+            </p>
 
             <div className="overflow-x-auto">
               <table className="w-full">
