@@ -438,6 +438,8 @@ class EmailCategorizerTester:
         # Test Gemini integration
         print("\n🤖 Testing AI Integration...")
         self.test_gemini_integration_availability()
+        self.test_gemini_categorization_direct()
+        self.test_gemini_multiple_categories()
         
         # Summary
         print("\n" + "=" * 60)
