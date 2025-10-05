@@ -213,11 +213,12 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Email Sync and Categorization with Gemini"
-  stuck_tasks: 
-    - "Email Sync and Categorization with Gemini"
+    - "Landing Page with Emergent Auth"
+    - "Dashboard with Gmail Connection"
+    - "Dashboard Stats and Email Display"
+  stuck_tasks: []
   test_all: false
-  test_priority: "stuck_first"
+  test_priority: "high_first"
 
 agent_communication:
   - agent: "main"
