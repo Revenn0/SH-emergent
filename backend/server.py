@@ -2,7 +2,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depend
 from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+import asyncpg
 import os
 import logging
 from pathlib import Path
@@ -26,10 +26,8 @@ import jwt
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+# PostgreSQL connection pool
+db_pool: Optional[asyncpg.Pool] = None
 
 # Configure Gemini
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
@@ -47,36 +45,19 @@ logger = logging.getLogger(__name__)
 
 # ==================== MODELS ====================
 class User(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    id: str
     email: str
     name: str
-    picture: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    picture: str = ""
+    gmail_email: Optional[str] = None
+    gmail_app_password: Optional[str] = None
+    created_at: Optional[datetime] = None
 
 class UserSession(BaseModel):
     user_id: str
     session_token: str
     expires_at: datetime
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class GmailConnection(BaseModel):
-    user_id: str
-    email: str
-    app_password: str
-    status: str = "connected"
-    last_sync: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class CategorizedEmail(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: str
-    email_id: str
-    subject: str
-    sender: str
-    date: datetime
-    category: str
-    snippet: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: Optional[datetime] = None
 
 class ConnectGmailRequest(BaseModel):
     email: str
@@ -89,6 +70,26 @@ class DashboardStats(BaseModel):
     last_sync: Optional[datetime]
     categories: dict
     recent_emails: List[dict]
+
+
+# ==================== DATABASE STARTUP/SHUTDOWN ====================
+@app.on_event("startup")
+async def startup_db():
+    global db_pool
+    database_url = os.environ.get('DATABASE_URL')
+    if not database_url:
+        raise RuntimeError("DATABASE_URL environment variable not set")
+    
+    db_pool = await asyncpg.create_pool(database_url, min_size=2, max_size=10)
+    logger.info("Database pool created")
+
+
+@app.on_event("shutdown")
+async def shutdown_db():
+    global db_pool
+    if db_pool:
+        await db_pool.close()
+        logger.info("Database pool closed")
 
 
 # ==================== AUTH HELPER ====================
@@ -104,25 +105,42 @@ async def get_current_user(request: Request) -> Optional[User]:
     if not session_token:
         return None
     
-    # Check session
-    session = await db.user_sessions.find_one({"session_token": session_token})
-    if not session:
-        return None
-    
-    # Check expiry
-    expires_at = session["expires_at"]
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    
-    if datetime.now(timezone.utc) >= expires_at:
-        return None
-    
-    # Get user
-    user_doc = await db.users.find_one({"id": session["user_id"]})
-    if not user_doc:
-        return None
-    
-    return User(**user_doc)
+    async with db_pool.acquire() as conn:
+        # Check session
+        session = await conn.fetchrow(
+            "SELECT * FROM user_sessions WHERE session_token = $1",
+            session_token
+        )
+        
+        if not session:
+            return None
+        
+        # Check expiry
+        expires_at = session["expires_at"]
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        
+        if datetime.now(timezone.utc) >= expires_at:
+            return None
+        
+        # Get user
+        user_row = await conn.fetchrow(
+            "SELECT * FROM users WHERE id = $1",
+            session["user_id"]
+        )
+        
+        if not user_row:
+            return None
+        
+        return User(
+            id=str(user_row["id"]),
+            email=user_row["email"],
+            name=user_row["name"] or "",
+            picture=user_row["picture"] or "",
+            gmail_email=user_row["gmail_email"],
+            gmail_app_password=user_row["gmail_app_password"],
+            created_at=user_row["created_at"]
+        )
 
 
 async def require_auth(request: Request) -> User:
@@ -205,36 +223,46 @@ async def auth_callback(code: str, state: str, response: Response):
         user_data = jwt.decode(id_token, options={"verify_signature": False})
     
     user_id = user_data["sub"]
-    existing_user = await db.users.find_one({"id": user_id})
     
-    if not existing_user:
-        user = User(
-            id=user_id,
-            email=user_data.get("email", ""),
-            name=user_data.get("first_name", "") or user_data.get("email", "").split("@")[0],
-            picture=user_data.get("profile_image_url", "")
+    async with db_pool.acquire() as conn:
+        existing_user = await conn.fetchrow(
+            "SELECT * FROM users WHERE id = $1",
+            user_id
         )
-        await db.users.insert_one(user.dict())
-    else:
-        await db.users.update_one(
-            {"id": user_id},
-            {"$set": {
-                "email": user_data.get("email", ""),
-                "name": user_data.get("first_name", "") or user_data.get("email", "").split("@")[0],
-                "picture": user_data.get("profile_image_url", "")
-            }}
+        
+        user_email = user_data.get("email", "")
+        user_name = user_data.get("first_name", "") or user_email.split("@")[0]
+        user_picture = user_data.get("profile_image_url", "")
+        
+        if not existing_user:
+            await conn.execute(
+                """
+                INSERT INTO users (id, email, name, picture)
+                VALUES ($1, $2, $3, $4)
+                """,
+                user_id, user_email, user_name, user_picture
+            )
+        else:
+            await conn.execute(
+                """
+                UPDATE users
+                SET email = $2, name = $3, picture = $4
+                WHERE id = $1
+                """,
+                user_id, user_email, user_name, user_picture
+            )
+        
+        # Create session
+        session_token = str(uuid.uuid4())
+        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        
+        await conn.execute(
+            """
+            INSERT INTO user_sessions (user_id, session_token, expires_at)
+            VALUES ($1, $2, $3)
+            """,
+            user_id, session_token, expires_at
         )
-    
-    session_token = str(uuid.uuid4())
-    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-    
-    session = UserSession(
-        user_id=user_id,
-        session_token=session_token,
-        expires_at=expires_at
-    )
-    
-    await db.user_sessions.insert_one(session.dict())
     
     response = RedirectResponse(url=FRONTEND_URL)
     response.set_cookie(
@@ -262,7 +290,11 @@ async def logout(request: Request, response: Response):
     session_token = request.cookies.get("session_token")
     
     if session_token:
-        await db.user_sessions.delete_one({"session_token": session_token})
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                "DELETE FROM user_sessions WHERE session_token = $1",
+                session_token
+            )
     
     response.delete_cookie(key="session_token", path="/")
     return {"success": True}
@@ -311,7 +343,7 @@ def get_email_body(msg):
             body = msg.get_payload(decode=True).decode('utf-8', errors='ignore')
         except:
             pass
-    return body[:500]  # First 500 chars
+    return body[:500]
 
 
 def categorize_with_gemini(subject: str, sender: str, body: str) -> str:
@@ -344,11 +376,11 @@ Respond with ONLY the category name (one word)."""
             if cat.lower() in category.lower():
                 return cat
         
-        return "Primary"  # Default
+        return "Primary"
         
     except Exception as e:
         logger.error(f"Gemini categorization error: {str(e)}")
-        return "Primary"  # Default on error
+        return "Primary"
 
 
 @api_router.post("/gmail/connect")
@@ -358,18 +390,16 @@ async def connect_gmail(request: ConnectGmailRequest, user: User = Depends(requi
     imap = connect_imap(request.email, request.app_password)
     imap.logout()
     
-    # Store credentials (in production, encrypt this!)
-    connection = GmailConnection(
-        user_id=user.id,
-        email=request.email,
-        app_password=request.app_password
-    )
-    
-    # Remove old connection
-    await db.gmail_connections.delete_many({"user_id": user.id})
-    
-    # Save new connection
-    await db.gmail_connections.insert_one(connection.dict())
+    # Store credentials in user record
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE users
+            SET gmail_email = $2, gmail_app_password = $3
+            WHERE id = $1
+            """,
+            user.id, request.email, request.app_password
+        )
     
     return {"success": True, "message": "Gmail connected successfully"}
 
@@ -377,14 +407,12 @@ async def connect_gmail(request: ConnectGmailRequest, user: User = Depends(requi
 @api_router.post("/gmail/sync")
 async def sync_emails(user: User = Depends(require_auth)):
     """Fetch and categorize emails from Gmail"""
-    # Get connection
-    connection = await db.gmail_connections.find_one({"user_id": user.id})
-    if not connection:
+    if not user.gmail_email or not user.gmail_app_password:
         raise HTTPException(status_code=404, detail="Gmail not connected")
     
     try:
         # Connect to Gmail
-        imap = connect_imap(connection["email"], connection["app_password"])
+        imap = connect_imap(user.gmail_email, user.gmail_app_password)
         imap.select("INBOX")
         
         # Search for recent emails (last 50)
@@ -396,61 +424,59 @@ async def sync_emails(user: User = Depends(require_auth)):
         
         categorized_count = 0
         
-        for email_id in email_ids:
-            try:
-                # Check if already categorized
-                existing = await db.categorized_emails.find_one({
-                    "user_id": user.id,
-                    "email_id": email_id.decode()
-                })
-                
-                if existing:
-                    continue
-                
-                # Fetch email
-                _, msg_data = imap.fetch(email_id, "(RFC822)")
-                email_body = msg_data[0][1]
-                msg = email.message_from_bytes(email_body)
-                
-                # Extract details
-                subject = decode_email_subject(msg.get("Subject", ""))
-                sender = msg.get("From", "")
-                date_str = msg.get("Date", "")
-                body = get_email_body(msg)
-                
-                # Parse date
+        async with db_pool.acquire() as conn:
+            for email_id in email_ids:
                 try:
-                    from email.utils import parsedate_to_datetime
-                    email_date = parsedate_to_datetime(date_str)
-                except:
-                    email_date = datetime.now(timezone.utc)
-                
-                # Categorize with Gemini
-                category = categorize_with_gemini(subject, sender, body)
-                
-                # Save to database
-                categorized_email = CategorizedEmail(
-                    user_id=user.id,
-                    email_id=email_id.decode(),
-                    subject=subject,
-                    sender=sender,
-                    date=email_date,
-                    category=category,
-                    snippet=body[:200]
-                )
-                
-                await db.categorized_emails.insert_one(categorized_email.dict())
-                categorized_count += 1
-                
-            except Exception as e:
-                logger.error(f"Error processing email {email_id}: {str(e)}")
-                continue
-        
-        # Update last sync
-        await db.gmail_connections.update_one(
-            {"user_id": user.id},
-            {"$set": {"last_sync": datetime.now(timezone.utc)}}
-        )
+                    email_id_str = email_id.decode()
+                    
+                    # Check if already categorized
+                    existing = await conn.fetchrow(
+                        """
+                        SELECT id FROM emails 
+                        WHERE user_id = $1 AND subject = $2
+                        LIMIT 1
+                        """,
+                        uuid.UUID(user.id), email_id_str
+                    )
+                    
+                    if existing:
+                        continue
+                    
+                    # Fetch email
+                    _, msg_data = imap.fetch(email_id, "(RFC822)")
+                    email_body = msg_data[0][1]
+                    msg = email.message_from_bytes(email_body)
+                    
+                    # Extract details
+                    subject = decode_email_subject(msg.get("Subject", ""))
+                    sender = msg.get("From", "")
+                    date_str = msg.get("Date", "")
+                    body = get_email_body(msg)
+                    
+                    # Parse date
+                    try:
+                        from email.utils import parsedate_to_datetime
+                        email_date = parsedate_to_datetime(date_str)
+                    except:
+                        email_date = datetime.now(timezone.utc)
+                    
+                    # Categorize with Gemini
+                    category = categorize_with_gemini(subject, sender, body)
+                    
+                    # Save to database
+                    await conn.execute(
+                        """
+                        INSERT INTO emails (user_id, subject, sender, date, body, category, confidence)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        """,
+                        uuid.UUID(user.id), subject, sender, email_date, body[:200], category, 0.9
+                    )
+                    
+                    categorized_count += 1
+                    
+                except Exception as e:
+                    logger.error(f"Error processing email {email_id}: {str(e)}")
+                    continue
         
         imap.logout()
         
@@ -464,10 +490,8 @@ async def sync_emails(user: User = Depends(require_auth)):
 @api_router.get("/dashboard/stats")
 async def get_dashboard_stats(user: User = Depends(require_auth)):
     """Get dashboard statistics"""
-    # Check Gmail connection
-    connection = await db.gmail_connections.find_one({"user_id": user.id})
     
-    if not connection:
+    if not user.gmail_email:
         return DashboardStats(
             connected=False,
             email=None,
@@ -477,37 +501,59 @@ async def get_dashboard_stats(user: User = Depends(require_auth)):
             recent_emails=[]
         )
     
-    # Get all categorized emails
-    all_emails = await db.categorized_emails.find({"user_id": user.id}).to_list(1000)
-    
-    # Calculate category counts
-    categories = {"Primary": 0, "Social": 0, "Promotions": 0, "Updates": 0, "Spam": 0}
-    for email_doc in all_emails:
-        cat = email_doc.get("category", "Primary")
-        if cat in categories:
-            categories[cat] += 1
-    
-    # Get recent emails (last 10)
-    recent_emails = await db.categorized_emails.find(
-        {"user_id": user.id}
-    ).sort("date", -1).limit(10).to_list(10)
-    
-    recent_list = [
-        {
-            "subject": e["subject"],
-            "sender": e["sender"],
-            "category": e["category"],
-            "date": e["date"].isoformat() if e.get("date") else None,
-            "snippet": e.get("snippet", "")
-        }
-        for e in recent_emails
-    ]
+    async with db_pool.acquire() as conn:
+        # Get all emails for this user
+        all_emails = await conn.fetch(
+            "SELECT * FROM emails WHERE user_id = $1",
+            uuid.UUID(user.id)
+        )
+        
+        # Calculate category counts
+        categories = {"Primary": 0, "Social": 0, "Promotions": 0, "Updates": 0, "Spam": 0}
+        for email_row in all_emails:
+            cat = email_row["category"] or "Primary"
+            if cat in categories:
+                categories[cat] += 1
+        
+        # Get recent emails (last 10)
+        recent_emails = await conn.fetch(
+            """
+            SELECT * FROM emails 
+            WHERE user_id = $1 
+            ORDER BY date DESC 
+            LIMIT 10
+            """,
+            uuid.UUID(user.id)
+        )
+        
+        recent_list = [
+            {
+                "subject": e["subject"],
+                "sender": e["sender"],
+                "category": e["category"],
+                "date": e["date"].isoformat() if e.get("date") else None,
+                "snippet": e.get("body", "")[:200]
+            }
+            for e in recent_emails
+        ]
+        
+        # Get last sync time (most recent email created_at)
+        last_sync_row = await conn.fetchrow(
+            """
+            SELECT MAX(created_at) as last_sync 
+            FROM emails 
+            WHERE user_id = $1
+            """,
+            uuid.UUID(user.id)
+        )
+        
+        last_sync = last_sync_row["last_sync"] if last_sync_row else None
     
     return DashboardStats(
         connected=True,
-        email=connection["email"],
+        email=user.gmail_email,
         total_emails=len(all_emails),
-        last_sync=connection.get("last_sync"),
+        last_sync=last_sync,
         categories=categories,
         recent_emails=recent_list
     )
@@ -516,7 +562,16 @@ async def get_dashboard_stats(user: User = Depends(require_auth)):
 @api_router.delete("/gmail/disconnect")
 async def disconnect_gmail(user: User = Depends(require_auth)):
     """Disconnect Gmail account"""
-    await db.gmail_connections.delete_many({"user_id": user.id})
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE users
+            SET gmail_email = NULL, gmail_app_password = NULL
+            WHERE id = $1
+            """,
+            user.id
+        )
+    
     return {"success": True}
 
 
@@ -527,7 +582,6 @@ app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=[
-        "https://mail-categorizer-1.preview.emergentagent.com",
         "http://localhost:3000",
         "http://localhost:5000",
         "https://c363f9ef-5f69-4abe-887f-60d877a4e2ce-00-25ix68esofxzf.riker.replit.dev",
@@ -536,7 +590,3 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()

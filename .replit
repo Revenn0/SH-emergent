@@ -1,10 +1,10 @@
-modules = ["nodejs-20", "web", "python-3.11"]
+modules = ["nodejs-20", "web", "python-3.11", "python3", "postgresql-16"]
 [agent]
 expertMode = true
 
 [nix]
 channel = "stable-25_05"
-packages = ["awsebcli", "c-ares", "cacert", "cargo", "glibcLocales", "grpc", "libffi", "libiconv", "libxcrypt", "openssl", "pkg-config", "rustc", "zlib", "gcc"]
+packages = ["awsebcli", "c-ares", "cacert", "cargo", "gcc", "glibcLocales", "grpc", "libffi", "libiconv", "libxcrypt", "openssl", "pkg-config", "postgresql", "rustc", "zlib"]
 
 [workflows]
 runButton = "Project"
