@@ -338,29 +338,30 @@ async def disconnect_gmail():
     return {"success": True}
 
 
-async def process_email_batch(email_data_list: List[tuple], conn):
-    """Process a batch of emails in parallel"""
+async def process_email_batch(email_data_list: List[tuple]):
+    """Process a batch of emails in parallel with individual connections"""
     async def process_single_email(email_id_str, body):
         try:
             parsed = parse_tracker_email(body)
             category = categorize_alert(parsed["alert_type"])
             
-            await conn.execute(
-                """
-                INSERT INTO tracker_alerts (
-                    user_id, email_id, alert_type, alert_time, location, 
-                    latitude, longitude, device_serial, tracker_name, 
-                    account_name, raw_body
+            async with db_pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO tracker_alerts (
+                        user_id, email_id, alert_type, alert_time, location, 
+                        latitude, longitude, device_serial, tracker_name, 
+                        account_name, raw_body
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                    ON CONFLICT (user_id, email_id) DO NOTHING
+                    """,
+                    DEFAULT_USER_ID, email_id_str, category, 
+                    parsed["time"], parsed["location"], 
+                    parsed["latitude"], parsed["longitude"],
+                    parsed["device_serial"], parsed["tracker_name"],
+                    parsed["account_name"], body[:500]
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-                ON CONFLICT (user_id, email_id) DO NOTHING
-                """,
-                DEFAULT_USER_ID, email_id_str, category, 
-                parsed["time"], parsed["location"], 
-                parsed["latitude"], parsed["longitude"],
-                parsed["device_serial"], parsed["tracker_name"],
-                parsed["account_name"], body[:500]
-            )
             return True
         except Exception as e:
             logger.error(f"Error processing email {email_id_str}: {str(e)}")
@@ -447,7 +448,7 @@ async def sync_alerts(request: SyncRequest):
             
             for i in range(0, len(email_data_list), batch_size):
                 batch = email_data_list[i:i + batch_size]
-                processed = await process_email_batch(batch, conn)
+                processed = await process_email_batch(batch)
                 total_processed += processed
             
             logger.info(f"Successfully processed {total_processed} emails")
