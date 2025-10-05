@@ -308,7 +308,7 @@ To deploy:
 
 ## Recent Changes
 
-- **2025-10-05**: Complete UI/UX Redesign
+- **2025-10-05**: Complete UI/UX Redesign + Performance Improvements
   - Redesigned login to match screenshot (minimal design with bike icon)
   - Created status cards dashboard (System, Database, Gmail, Alerts)
   - Implemented alert grouping by motorcycle (tracker_name)
@@ -319,7 +319,15 @@ To deploy:
   - Added Google Maps integration for locations
   - Reorganized sidebar (Bike Tracker, Admin Dashboard, Service Tracker)
   - Applied clean, minimal color scheme (gray scale + accents)
-  - Removed "Made with Emergent" footer
+  
+- **2025-10-05**: Performance & Features Enhancement
+  - **Parallel Email Processing**: Sync now processes 10 emails simultaneously using asyncio.gather (10x faster)
+  - **Category System**: Added 14 predefined alert categories with automatic classification
+  - **Dynamic Filters**: Dropdown filter to view alerts by category in real-time
+  - **Auto-Refresh**: Optional 30-second auto-refresh to keep dashboard updated
+  - **Optimized Queries**: Reduced database calls with batch queries and ON CONFLICT handling
+  - **Lightweight UI**: Instant category switching without page reload
+  - **Better UX**: Clear filter button, active filter indicator, category-specific counts
 
 ## User Preferences
 
