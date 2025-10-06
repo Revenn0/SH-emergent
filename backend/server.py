@@ -1,5 +1,6 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Query, Depends, Header
 from fastapi.responses import RedirectResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
@@ -7,9 +8,9 @@ import asyncpg
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import imaplib
 import email
 from email.header import decode_header
@@ -18,6 +19,8 @@ import re
 import asyncio
 from functools import lru_cache
 from passlib.context import CryptContext
+from jose import JWTError, jwt
+import secrets
 
 
 ROOT_DIR = Path(__file__).parent
@@ -39,6 +42,13 @@ DEFAULT_USER_ID = "default"
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
+SECRET_KEY = os.environ.get('JWT_SECRET_KEY', secrets.token_urlsafe(32))
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
+REFRESH_TOKEN_EXPIRE_DAYS = 7
+
+security = HTTPBearer()
+
 ALERT_CATEGORIES = [
     "Heavy Impact",
     "Light Sensor",
@@ -58,9 +68,24 @@ ALERT_CATEGORIES = [
 ]
 
 
+class RegisterRequest(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+    full_name: Optional[str] = None
+
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    user: dict
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 class ConnectGmailRequest(BaseModel):
     email: str
@@ -80,6 +105,51 @@ class AddNoteRequest(BaseModel):
 
 class AssignRequest(BaseModel):
     assigned_to: str
+
+
+def create_access_token(data: dict) -> str:
+    """Create JWT access token"""
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire, "type": "access"})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def create_refresh_token(data: dict) -> str:
+    """Create JWT refresh token"""
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({"exp": expire, "type": "refresh"})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def verify_token(token: str, token_type: str = "access") -> dict:
+    """Verify and decode JWT token"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") != token_type:
+            raise HTTPException(status_code=401, detail="Invalid token type")
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Dependency to get current authenticated user"""
+    token = credentials.credentials
+    payload = verify_token(token, "access")
+    user_id = payload.get("sub")
+    
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    async with db_pool.acquire() as conn:
+        user = await conn.fetchrow(
+            "SELECT id, username, email, full_name, created_at FROM users WHERE id = $1",
+            user_id
+        )
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        return dict(user)
 
 
 def parse_tracker_email(body: str) -> dict:
@@ -183,14 +253,14 @@ async def startup_db():
             """
             CREATE TABLE IF NOT EXISTS users (
                 id VARCHAR PRIMARY KEY,
-                email VARCHAR,
-                name VARCHAR,
-                picture VARCHAR,
+                username VARCHAR UNIQUE NOT NULL,
+                email VARCHAR UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                full_name VARCHAR,
                 gmail_email VARCHAR,
                 gmail_app_password VARCHAR,
-                username VARCHAR UNIQUE,
-                password_hash TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
@@ -234,52 +304,26 @@ async def startup_db():
             """
         )
         
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS admin_credentials (
-                id SERIAL PRIMARY KEY,
-                username VARCHAR UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        
         admin_exists = await conn.fetchval(
-            "SELECT COUNT(*) FROM admin_credentials WHERE username = 'admin'"
-        )
-        
-        if admin_exists == 0:
-            admin_password_hash = pwd_context.hash("dimension")
-            await conn.execute(
-                """
-                INSERT INTO admin_credentials (username, password_hash)
-                VALUES ($1, $2)
-                ON CONFLICT (username) DO UPDATE 
-                SET password_hash = EXCLUDED.password_hash
-                """,
-                "admin", admin_password_hash
-            )
-            logger.info("Admin credentials created in admin_credentials table")
-        else:
-            logger.info("Admin credentials already exist in admin_credentials table")
-        
-        admin_user_exists = await conn.fetchval(
             "SELECT COUNT(*) FROM users WHERE username = 'admin'"
         )
         
-        if admin_user_exists == 0:
+        if admin_exists == 0:
+            import uuid
+            admin_id = str(uuid.uuid4())
             admin_password_hash = pwd_context.hash("dimension")
             await conn.execute(
                 """
-                INSERT INTO users (id, username, email, password_hash, created_at)
-                VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+                INSERT INTO users (id, username, email, password_hash, full_name)
+                VALUES ($1, $2, $3, $4, $5)
                 ON CONFLICT (username) DO UPDATE 
                 SET password_hash = EXCLUDED.password_hash
                 """,
-                "admin-user", "admin", "admin@tracker.com", admin_password_hash
+                admin_id, "admin", "admin@tracker.com", admin_password_hash, "Administrator"
             )
-            logger.info("Admin user also created in users table")
+            logger.info("Default admin user created (username: admin, password: dimension)")
+        else:
+            logger.info("Admin user already exists")
     
     background_task = asyncio.create_task(auto_sync_background())
     logger.info("Background sync task started (10 minute interval)")
@@ -383,53 +427,118 @@ async def shutdown_db():
         logger.info("Database pool closed")
 
 
-@api_router.get("/auth/debug")
-async def debug_auth():
-    """Debug endpoint to check user existence"""
+@api_router.post("/auth/register")
+async def register(request: RegisterRequest):
+    """Register a new user"""
     async with db_pool.acquire() as conn:
-        user = await conn.fetchrow(
-            "SELECT id, username, email, password_hash FROM users WHERE username = 'admin'"
+        existing = await conn.fetchrow(
+            "SELECT id FROM users WHERE username = $1 OR email = $2",
+            request.username, request.email
         )
-        return {
-            "user_exists": user is not None,
-            "has_password": user['password_hash'] is not None if user else False,
-            "username": user['username'] if user else None
-        }
+        
+        if existing:
+            raise HTTPException(status_code=400, detail="Username or email already exists")
+        
+        import uuid
+        user_id = str(uuid.uuid4())
+        password_hash = pwd_context.hash(request.password)
+        
+        await conn.execute(
+            """
+            INSERT INTO users (id, username, email, password_hash, full_name)
+            VALUES ($1, $2, $3, $4, $5)
+            """,
+            user_id, request.username, request.email, password_hash, request.full_name
+        )
+        
+        access_token = create_access_token({"sub": user_id})
+        refresh_token = create_refresh_token({"sub": user_id})
+        
+        logger.info(f"New user registered: {request.username}")
+        
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            user={
+                "id": user_id,
+                "username": request.username,
+                "email": request.email,
+                "full_name": request.full_name
+            }
+        )
 
 
 @api_router.post("/auth/login")
 async def login(request: LoginRequest):
-    """Login with database authentication - reads from admin_credentials table"""
+    """Login with JWT authentication"""
     async with db_pool.acquire() as conn:
-        credentials = await conn.fetchrow(
-            "SELECT username, password_hash FROM admin_credentials WHERE username = $1",
+        user = await conn.fetchrow(
+            "SELECT id, username, email, password_hash, full_name FROM users WHERE username = $1",
             request.username
         )
         
-        if not credentials:
+        if not user:
             logger.warning(f"Login attempt for non-existent user: {request.username}")
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
-        if not credentials['password_hash']:
-            logger.error(f"User {request.username} has no password hash")
+        if not pwd_context.verify(request.password, user['password_hash']):
+            logger.warning(f"Invalid password for user: {request.username}")
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
-        try:
-            if not pwd_context.verify(request.password, credentials['password_hash']):
-                logger.warning(f"Invalid password for user: {request.username}")
-                raise HTTPException(status_code=401, detail="Invalid credentials")
-        except Exception as e:
-            logger.error(f"Password verification error: {str(e)}")
-            raise HTTPException(status_code=500, detail="Authentication error")
+        access_token = create_access_token({"sub": user['id']})
+        refresh_token = create_refresh_token({"sub": user['id']})
         
-        return {
-            "success": True,
-            "user": {
-                "id": "admin-user",
-                "username": credentials['username'],
-                "email": "admin@tracker.com"
+        logger.info(f"User logged in: {request.username}")
+        
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            user={
+                "id": user['id'],
+                "username": user['username'],
+                "email": user['email'],
+                "full_name": user['full_name']
             }
+        )
+
+
+@api_router.post("/auth/refresh")
+async def refresh_token_endpoint(request: RefreshTokenRequest):
+    """Refresh access token using refresh token"""
+    payload = verify_token(request.refresh_token, "refresh")
+    user_id = payload.get("sub")
+    
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+    
+    async with db_pool.acquire() as conn:
+        user = await conn.fetchrow(
+            "SELECT id, username, email, full_name FROM users WHERE id = $1",
+            user_id
+        )
+        
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+    
+    access_token = create_access_token({"sub": user_id})
+    new_refresh_token = create_refresh_token({"sub": user_id})
+    
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=new_refresh_token,
+        user={
+            "id": user['id'],
+            "username": user['username'],
+            "email": user['email'],
+            "full_name": user['full_name']
         }
+    )
+
+
+@api_router.get("/auth/me")
+async def get_me(current_user: dict = Depends(get_current_user)):
+    """Get current authenticated user"""
+    return current_user
 
 
 def connect_imap(email_addr: str, app_password: str):
