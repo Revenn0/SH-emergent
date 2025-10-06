@@ -696,23 +696,6 @@ async def process_email_batch(email_data_list: List[tuple], user_id: str):
     return sum(1 for r in results if r is True)
 
 
-@api_router.post("/alerts/sync")
-async def sync_alerts(request: SyncRequest, current_user: dict = Depends(get_current_user)):
-    """Fetch and categorize tracker alerts from Gmail - uses new logging service"""
-    async with db_pool.acquire() as conn:
-        user = await conn.fetchrow(
-            "SELECT * FROM users WHERE id = $1",
-            current_user['id']
-        )
-    
-    result = await read_emails_with_logging(dict(user), request.limit, source="api")
-    
-    if result['status'] == 'error':
-        raise HTTPException(status_code=500, detail=result['errors'][0] if result['errors'] else "Sync failed")
-    
-    return {"success": True, "categorized": result['emails_new'], "emails_read": result['emails_read']}
-
-
 @api_router.get("/alerts/categories")
 async def get_categories(current_user: dict = Depends(get_current_user)):
     """Get all available alert categories"""
