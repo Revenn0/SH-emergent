@@ -757,7 +757,7 @@ async def sync_alerts(request: SyncRequest, current_user: dict = Depends(get_cur
         
         checkpoint = await conn.fetchrow(
             "SELECT * FROM sync_checkpoints WHERE user_id = $1",
-            current_user['id']
+            str(current_user['id'])
         )
     
     try:
@@ -786,7 +786,7 @@ async def sync_alerts(request: SyncRequest, current_user: dict = Depends(get_cur
                 SELECT email_id FROM tracker_alerts 
                 WHERE user_id = $1
                 """,
-                current_user['id']
+                str(current_user['id'])
             )
             existing_set = {row['email_id'] for row in existing_ids}
             
@@ -819,7 +819,7 @@ async def sync_alerts(request: SyncRequest, current_user: dict = Depends(get_cur
             
             for i in range(0, len(email_data_list), batch_size):
                 batch = email_data_list[i:i + batch_size]
-                processed = await process_email_batch(batch, current_user['id'])
+                processed = await process_email_batch(batch, str(current_user['id']))
                 total_processed += processed
             
             logger.info(f"Successfully processed {total_processed} emails")
@@ -833,7 +833,7 @@ async def sync_alerts(request: SyncRequest, current_user: dict = Depends(get_cur
                     ON CONFLICT (user_id) DO UPDATE
                     SET last_email_id = $2, last_sync_at = CURRENT_TIMESTAMP
                     """,
-                    current_user['id'], last_email_id
+                    str(current_user['id']), last_email_id
                 )
                 logger.info(f"Checkpoint saved: {last_email_id}")
             
@@ -856,7 +856,7 @@ async def get_categories(current_user: dict = Depends(get_current_user)):
             GROUP BY alert_type
             ORDER BY count DESC
             """,
-            current_user['id']
+            str(current_user['id'])
         )
         
         category_stats = {
@@ -885,7 +885,7 @@ async def list_alerts(
     async with db_pool.acquire() as conn:
         offset = (page - 1) * limit
         where_clause = "WHERE user_id = $1"
-        params = [current_user['id']]
+        params = [str(current_user['id'])]
         
         if category and category != "All":
             where_clause += " AND alert_type = $2"
@@ -1040,11 +1040,11 @@ async def clear_all_alerts(current_user: dict = Depends(get_current_user)):
     async with db_pool.acquire() as conn:
         await conn.execute(
             "DELETE FROM tracker_alerts WHERE user_id = $1",
-            current_user['id']
+            str(current_user['id'])
         )
         await conn.execute(
             "DELETE FROM sync_checkpoints WHERE user_id = $1",
-            current_user['id']
+            str(current_user['id'])
         )
     
     return {"success": True, "message": "All alerts and sync history cleared"}
@@ -1056,7 +1056,7 @@ async def delete_alert(alert_id: int, current_user: dict = Depends(get_current_u
     async with db_pool.acquire() as conn:
         await conn.execute(
             "DELETE FROM tracker_alerts WHERE id = $1 AND user_id = $2",
-            alert_id, current_user['id']
+            alert_id, str(current_user['id'])
         )
     
     return {"success": True}
@@ -1074,7 +1074,7 @@ async def acknowledge_alert(alert_id: int, request: AcknowledgeRequest, current_
                 acknowledged_by = $1
             WHERE id = $2 AND user_id = $3
             """,
-            request.acknowledged_by, alert_id, current_user['id']
+            request.acknowledged_by, alert_id, str(current_user['id'])
         )
     
     return {"success": True}
@@ -1094,7 +1094,7 @@ async def update_alert_status(alert_id: int, request: UpdateStatusRequest, curre
             SET status = $1
             WHERE id = $2 AND user_id = $3
             """,
-            request.status, alert_id, current_user['id']
+            request.status, alert_id, str(current_user['id'])
         )
     
     return {"success": True}
@@ -1110,7 +1110,7 @@ async def add_alert_note(alert_id: int, request: AddNoteRequest, current_user: d
             SET notes = $1
             WHERE id = $2 AND user_id = $3
             """,
-            request.notes, alert_id, current_user['id']
+            request.notes, alert_id, str(current_user['id'])
         )
     
     return {"success": True}
@@ -1126,7 +1126,7 @@ async def assign_alert(alert_id: int, request: AssignRequest, current_user: dict
             SET assigned_to = $1
             WHERE id = $2 AND user_id = $3
             """,
-            request.assigned_to, alert_id, current_user['id']
+            request.assigned_to, alert_id, str(current_user['id'])
         )
     
     return {"success": True}
@@ -1138,7 +1138,7 @@ async def toggle_favorite(alert_id: int, current_user: dict = Depends(get_curren
     async with db_pool.acquire() as conn:
         current = await conn.fetchrow(
             "SELECT favorite FROM tracker_alerts WHERE id = $1 AND user_id = $2",
-            alert_id, current_user['id']
+            alert_id, str(current_user['id'])
         )
         
         new_value = not current['favorite'] if current else True
@@ -1149,7 +1149,7 @@ async def toggle_favorite(alert_id: int, current_user: dict = Depends(get_curren
             SET favorite = $1
             WHERE id = $2 AND user_id = $3
             """,
-            new_value, alert_id, current_user['id']
+            new_value, alert_id, str(current_user['id'])
         )
     
     return {"success": True, "favorite": new_value}

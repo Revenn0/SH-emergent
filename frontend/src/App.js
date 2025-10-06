@@ -66,7 +66,6 @@ function LoginPage({ onLogin }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isRegister, setIsRegister] = useState(false);
-  const [email, setEmail] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -75,7 +74,7 @@ function LoginPage({ onLogin }) {
 
     try {
       const endpoint = isRegister ? "/auth/register" : "/auth/login";
-      const payload = isRegister ? { username, email, password } : { username, password };
+      const payload = { username, password };
       
       const response = await api.post(endpoint, payload);
       
@@ -117,22 +116,6 @@ function LoginPage({ onLogin }) {
                 required
               />
             </div>
-
-            {isRegister && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none text-sm"
-                  placeholder="Enter email"
-                  required
-                />
-              </div>
-            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
