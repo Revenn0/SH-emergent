@@ -106,6 +106,223 @@ class AddNoteRequest(BaseModel):
 class AssignRequest(BaseModel):
     assigned_to: str
 
+class ReadEmailsRequest(BaseModel):
+    limit: int = 100
+
+
+async def read_emails_with_logging(user: dict, limit: int = 100, source: str = "manual") -> dict:
+    import uuid
+    import json
+    from time import time
+    
+    run_id = str(uuid.uuid4())
+    started_at = datetime.now(timezone.utc)
+    log_steps = []
+    errors = []
+    emails_read = 0
+    emails_new = 0
+    status = "success"
+    
+    try:
+        if not user.get('gmail_email') or not user.get('gmail_app_password'):
+            raise HTTPException(status_code=404, detail="Gmail not connected")
+        
+        log_steps.append({
+            "step": "start",
+            "message": f"Starting email sync for user {user['username']}",
+            "timestamp": started_at.isoformat()
+        })
+        
+        log_steps.append({
+            "step": "connect_imap",
+            "message": f"Connecting to IMAP server for {user['gmail_email']}...",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+        
+        imap = connect_imap(user['gmail_email'], user['gmail_app_password'])
+        imap.select("INBOX")
+        
+        log_steps.append({
+            "step": "imap_connected",
+            "message": "Successfully connected to IMAP server",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+        
+        async with db_pool.acquire() as conn:
+            checkpoint = await conn.fetchrow(
+                "SELECT * FROM sync_checkpoints WHERE user_id = $1",
+                user['id']
+            )
+        
+        log_steps.append({
+            "step": "search_emails",
+            "message": "Searching for tracker alert emails...",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+        
+        _, message_numbers = imap.search(None, f'FROM "alerts-no-reply@tracking-update.com"')
+        email_ids = message_numbers[0].split()
+        
+        if checkpoint and checkpoint['last_email_id']:
+            try:
+                last_idx = email_ids.index(checkpoint['last_email_id'].encode())
+                email_ids = email_ids[last_idx + 1:]
+                log_steps.append({
+                    "step": "checkpoint_applied",
+                    "message": f"Applied checkpoint: processing {len(email_ids)} new emails since last sync",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+            except ValueError:
+                email_ids = email_ids[-limit:]
+                log_steps.append({
+                    "step": "checkpoint_not_found",
+                    "message": f"Checkpoint email not found, processing latest {limit} emails",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+        else:
+            email_ids = email_ids[-limit:]
+            log_steps.append({
+                "step": "no_checkpoint",
+                "message": f"No checkpoint found, processing latest {limit} emails",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        
+        log_steps.append({
+            "step": "emails_found",
+            "message": f"Found {len(email_ids)} emails to process",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+        
+        emails_read = len(email_ids)
+        
+        async with db_pool.acquire() as conn:
+            existing_ids = await conn.fetch(
+                "SELECT email_id FROM tracker_alerts WHERE user_id = $1",
+                user['id']
+            )
+            existing_set = {row['email_id'] for row in existing_ids}
+            
+            email_data_list = []
+            for email_id in email_ids:
+                email_id_str = email_id.decode()
+                
+                if email_id_str in existing_set:
+                    continue
+                
+                try:
+                    _, msg_data = imap.fetch(email_id, "(RFC822)")
+                    email_body = msg_data[0][1]
+                    msg = email.message_from_bytes(email_body)
+                    body = get_email_body(msg)
+                    email_data_list.append((email_id_str, body))
+                except Exception as e:
+                    error_msg = f"Error fetching email {email_id_str}: {str(e)}"
+                    logger.error(error_msg)
+                    errors.append(error_msg)
+            
+            imap.logout()
+            
+            log_steps.append({
+                "step": "imap_disconnected",
+                "message": "Disconnected from IMAP server",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+            
+            if not email_data_list:
+                log_steps.append({
+                    "step": "no_new_emails",
+                    "message": "No new emails to process",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+            else:
+                log_steps.append({
+                    "step": "processing_emails",
+                    "message": f"Processing {len(email_data_list)} new emails...",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+                
+                batch_size = 10
+                total_processed = 0
+                
+                for i in range(0, len(email_data_list), batch_size):
+                    batch = email_data_list[i:i + batch_size]
+                    processed = await process_email_batch(batch, user['id'])
+                    total_processed += processed
+                
+                emails_new = total_processed
+                
+                log_steps.append({
+                    "step": "emails_processed",
+                    "message": f"Successfully processed {total_processed} new emails",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                })
+                
+                if email_data_list:
+                    last_email_id = email_data_list[-1][0]
+                    await conn.execute(
+                        """
+                        INSERT INTO sync_checkpoints (user_id, last_email_id, last_sync_at)
+                        VALUES ($1, $2, CURRENT_TIMESTAMP)
+                        ON CONFLICT (user_id) DO UPDATE
+                        SET last_email_id = $2, last_sync_at = CURRENT_TIMESTAMP
+                        """,
+                        user['id'], last_email_id
+                    )
+                    
+                    log_steps.append({
+                        "step": "checkpoint_saved",
+                        "message": f"Checkpoint saved: {last_email_id}",
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    })
+    
+    except Exception as e:
+        status = "error"
+        error_msg = f"Sync failed: {str(e)}"
+        logger.error(error_msg)
+        errors.append(error_msg)
+        log_steps.append({
+            "step": "error",
+            "message": error_msg,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+    
+    completed_at = datetime.now(timezone.utc)
+    duration_ms = int((completed_at - started_at).total_seconds() * 1000)
+    
+    log_steps.append({
+        "step": "completed",
+        "message": f"Sync completed in {duration_ms}ms",
+        "timestamp": completed_at.isoformat()
+    })
+    
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO email_sync_runs (
+                user_id, started_at, completed_at, source, status,
+                emails_read, emails_new, error_summary, log_json
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id
+            """,
+            user['id'], started_at, completed_at, source, status,
+            emails_read, emails_new,
+            "\n".join(errors) if errors else None,
+            json.dumps(log_steps)
+        )
+    
+    return {
+        "run_id": run_id,
+        "started_at": started_at.isoformat(),
+        "completed_at": completed_at.isoformat(),
+        "duration_ms": duration_ms,
+        "emails_read": emails_read,
+        "emails_new": emails_new,
+        "log_steps": log_steps,
+        "errors": errors,
+        "status": status
+    }
+
 
 def create_access_token(data: dict) -> str:
     """Create JWT access token"""
@@ -343,67 +560,13 @@ async def auto_sync_background():
                     logger.info(f"Starting automatic background sync for user {user['username']}...")
                     
                     try:
-                        imap = connect_imap(user['gmail_email'], user['gmail_app_password'])
-                        imap.select("INBOX")
-                        
-                        checkpoint = await conn.fetchrow(
-                            "SELECT * FROM sync_checkpoints WHERE user_id = $1",
-                            user['id']
-                        )
-                        
-                        _, message_numbers = imap.search(None, f'FROM "alerts-no-reply@tracking-update.com"')
-                        email_ids = message_numbers[0].split()
-                        
-                        if checkpoint and checkpoint['last_email_id']:
-                            try:
-                                last_idx = email_ids.index(checkpoint['last_email_id'].encode())
-                                email_ids = email_ids[last_idx + 1:]
-                                logger.info(f"Background sync: processing {len(email_ids)} new emails for {user['username']}")
-                            except ValueError:
-                                email_ids = email_ids[-100:]
+                        result = await read_emails_with_logging(dict(user), limit=100, source="background")
+                        if result['status'] == 'success':
+                            logger.info(f"Background sync completed for {user['username']}: {result['emails_new']} new emails processed")
                         else:
-                            email_ids = email_ids[-100:]
-                        
-                        if email_ids:
-                            async with db_pool.acquire() as conn2:
-                                existing_ids = await conn2.fetch(
-                                    "SELECT email_id FROM tracker_alerts WHERE user_id = $1",
-                                    user['id']
-                                )
-                                existing_set = {row['email_id'] for row in existing_ids}
-                                
-                                email_data_list = []
-                                for email_id in email_ids:
-                                    email_id_str = email_id.decode()
-                                    if email_id_str not in existing_set:
-                                        try:
-                                            _, msg_data = imap.fetch(email_id, "(RFC822)")
-                                            email_body = msg_data[0][1]
-                                            msg = email.message_from_bytes(email_body)
-                                            body = get_email_body(msg)
-                                            email_data_list.append((email_id_str, body))
-                                        except Exception as e:
-                                            logger.error(f"Error fetching email: {str(e)}")
-                                
-                                if email_data_list:
-                                    processed = await process_email_batch(email_data_list, user['id'])
-                                    last_email_id = email_data_list[-1][0]
-                                    await conn2.execute(
-                                        """
-                                        INSERT INTO sync_checkpoints (user_id, last_email_id, last_sync_at)
-                                        VALUES ($1, $2, CURRENT_TIMESTAMP)
-                                        ON CONFLICT (user_id) DO UPDATE
-                                        SET last_email_id = $2, last_sync_at = CURRENT_TIMESTAMP
-                                        """,
-                                        user['id'], last_email_id
-                                    )
-                                    logger.info(f"Background sync completed: {processed} alerts processed")
-                        
-                        imap.logout()
+                            logger.error(f"Background sync failed for {user['username']}: {result['errors']}")
                     except Exception as e:
-                        logger.error(f"Background sync error: {str(e)}")
-                else:
-                    logger.debug("Background sync skipped: Gmail not connected")
+                        logger.error(f"Background sync error for {user['username']}: {str(e)}")
                     
         except asyncio.CancelledError:
             logger.info("Background sync task cancelled")
@@ -623,6 +786,57 @@ async def disconnect_gmail(current_user: dict = Depends(get_current_user)):
     return {"success": True}
 
 
+@api_router.post("/emails/read")
+async def read_emails(request: ReadEmailsRequest, current_user: dict = Depends(get_current_user)):
+    if current_user['username'] != 'admin':
+        raise HTTPException(status_code=403, detail="Only admin users can manually read emails")
+    
+    async with db_pool.acquire() as conn:
+        user = await conn.fetchrow(
+            "SELECT * FROM users WHERE id = $1",
+            current_user['id']
+        )
+    
+    result = await read_emails_with_logging(dict(user), request.limit, source="manual")
+    return result
+
+
+@api_router.get("/emails/sync-history")
+async def get_sync_history(limit: int = Query(10, ge=1, le=100), current_user: dict = Depends(get_current_user)):
+    import json
+    
+    async with db_pool.acquire() as conn:
+        runs = await conn.fetch(
+            """
+            SELECT id, user_id, started_at, completed_at, source, status,
+                   emails_read, emails_new, error_summary, log_json
+            FROM email_sync_runs
+            WHERE user_id = $1
+            ORDER BY started_at DESC
+            LIMIT $2
+            """,
+            current_user['id'], limit
+        )
+    
+    history = []
+    for run in runs:
+        history.append({
+            "id": run['id'],
+            "user_id": run['user_id'],
+            "started_at": run['started_at'].isoformat() if run['started_at'] else None,
+            "completed_at": run['completed_at'].isoformat() if run['completed_at'] else None,
+            "duration_ms": int((run['completed_at'] - run['started_at']).total_seconds() * 1000) if run['started_at'] and run['completed_at'] else None,
+            "source": run['source'],
+            "status": run['status'],
+            "emails_read": run['emails_read'],
+            "emails_new": run['emails_new'],
+            "error_summary": run['error_summary'],
+            "log_steps": json.loads(run['log_json']) if run['log_json'] else []
+        })
+    
+    return {"history": history}
+
+
 async def process_email_batch(email_data_list: List[tuple], user_id: str):
     """Process a batch of emails in parallel with individual connections"""
     async def process_single_email(email_id_str, body):
@@ -659,103 +873,19 @@ async def process_email_batch(email_data_list: List[tuple], user_id: str):
 
 @api_router.post("/alerts/sync")
 async def sync_alerts(request: SyncRequest, current_user: dict = Depends(get_current_user)):
-    """Fetch and categorize tracker alerts from Gmail with parallel processing and checkpoint"""
+    """Fetch and categorize tracker alerts from Gmail - uses new logging service"""
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
             "SELECT * FROM users WHERE id = $1",
             current_user['id']
         )
-        
-        if not user or not user['gmail_email'] or not user['gmail_app_password']:
-            raise HTTPException(status_code=404, detail="Gmail not connected")
-        
-        checkpoint = await conn.fetchrow(
-            "SELECT * FROM sync_checkpoints WHERE user_id = $1",
-            current_user['id']
-        )
     
-    try:
-        imap = connect_imap(user['gmail_email'], user['gmail_app_password'])
-        imap.select("INBOX")
-        
-        _, message_numbers = imap.search(None, f'FROM "alerts-no-reply@tracking-update.com"')
-        email_ids = message_numbers[0].split()
-        
-        if checkpoint and checkpoint['last_email_id']:
-            try:
-                last_idx = email_ids.index(checkpoint['last_email_id'].encode())
-                email_ids = email_ids[last_idx + 1:]
-                logger.info(f"Incremental sync: processing {len(email_ids)} new emails since last checkpoint")
-            except ValueError:
-                logger.warning("Checkpoint email not found, processing latest emails")
-                email_ids = email_ids[-request.limit:]
-        else:
-            email_ids = email_ids[-request.limit:]
-        
-        logger.info(f"Found {len(email_ids)} emails to process")
-        
-        async with db_pool.acquire() as conn:
-            existing_ids = await conn.fetch(
-                """
-                SELECT email_id FROM tracker_alerts 
-                WHERE user_id = $1
-                """,
-                current_user['id']
-            )
-            existing_set = {row['email_id'] for row in existing_ids}
-            
-            email_data_list = []
-            for email_id in email_ids:
-                email_id_str = email_id.decode()
-                
-                if email_id_str in existing_set:
-                    continue
-                
-                try:
-                    _, msg_data = imap.fetch(email_id, "(RFC822)")
-                    email_body = msg_data[0][1]
-                    msg = email.message_from_bytes(email_body)
-                    body = get_email_body(msg)
-                    
-                    email_data_list.append((email_id_str, body))
-                except Exception as e:
-                    logger.error(f"Error fetching email {email_id_str}: {str(e)}")
-            
-            imap.logout()
-            
-            if not email_data_list:
-                return {"success": True, "categorized": 0, "message": "No new emails to process"}
-            
-            logger.info(f"Processing {len(email_data_list)} new emails in parallel")
-            
-            batch_size = 10
-            total_processed = 0
-            
-            for i in range(0, len(email_data_list), batch_size):
-                batch = email_data_list[i:i + batch_size]
-                processed = await process_email_batch(batch, current_user['id'])
-                total_processed += processed
-            
-            logger.info(f"Successfully processed {total_processed} emails")
-            
-            if email_data_list:
-                last_email_id = email_data_list[-1][0]
-                await conn.execute(
-                    """
-                    INSERT INTO sync_checkpoints (user_id, last_email_id, last_sync_at)
-                    VALUES ($1, $2, CURRENT_TIMESTAMP)
-                    ON CONFLICT (user_id) DO UPDATE
-                    SET last_email_id = $2, last_sync_at = CURRENT_TIMESTAMP
-                    """,
-                    current_user['id'], last_email_id
-                )
-                logger.info(f"Checkpoint saved: {last_email_id}")
-            
-            return {"success": True, "categorized": total_processed}
-        
-    except Exception as e:
-        logger.error(f"Sync error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+    result = await read_emails_with_logging(dict(user), request.limit, source="api")
+    
+    if result['status'] == 'error':
+        raise HTTPException(status_code=500, detail=result['errors'][0] if result['errors'] else "Sync failed")
+    
+    return {"success": True, "categorized": result['emails_new'], "emails_read": result['emails_read']}
 
 
 @api_router.get("/alerts/categories")
