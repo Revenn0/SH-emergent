@@ -143,10 +143,15 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
     
+    try:
+        user_id_int = int(user_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=401, detail="Invalid token format - please login again")
+    
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
             "SELECT id, username, is_admin, created_at FROM admin_credentials WHERE id = $1",
-            user_id
+            user_id_int
         )
         
         if not user:

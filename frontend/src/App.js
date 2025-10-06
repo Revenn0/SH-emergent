@@ -204,6 +204,11 @@ function Dashboard({ user, onLogout }) {
     has_next: false,
     has_prev: false
   });
+  
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [newUsername, setNewUsername] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newIsAdmin, setNewIsAdmin] = useState(false);
 
   useEffect(() => {
     loadAlerts();
@@ -408,6 +413,54 @@ function Dashboard({ user, onLogout }) {
       alert("Erro ao limpar histórico");
     }
   };
+
+  const loadUsers = async () => {
+    if (!user.is_admin) return;
+    try {
+      const response = await api.get("/admin/users");
+      setAdminUsers(response.data.users);
+    } catch (error) {
+      console.error("Failed to load users:", error);
+    }
+  };
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    if (!newUsername || !newPassword) {
+      alert("Username and password are required");
+      return;
+    }
+    try {
+      await api.post("/admin/create-user", {
+        username: newUsername,
+        password: newPassword,
+        is_admin: newIsAdmin
+      });
+      alert("User created successfully!");
+      setNewUsername("");
+      setNewPassword("");
+      setNewIsAdmin(false);
+      await loadUsers();
+    } catch (error) {
+      alert(error.response?.data?.detail || "Failed to create user");
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!window.confirm("Delete this user?")) return;
+    try {
+      await api.delete(`/admin/users/${userId}`);
+      await loadUsers();
+    } catch (error) {
+      alert(error.response?.data?.detail || "Failed to delete user");
+    }
+  };
+
+  useEffect(() => {
+    if (user && user.is_admin && currentPage === "admin") {
+      loadUsers();
+    }
+  }, [user, currentPage]);
 
   const openAlertModal = (group) => {
     setSelectedAlert(group);
@@ -993,6 +1046,92 @@ function Dashboard({ user, onLogout }) {
           Save Configuration
         </button>
       </div>
+
+      {user.is_admin && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">User Management</h3>
+          
+          <form onSubmit={handleCreateUser} className="mb-6 p-4 bg-gray-50 rounded-md">
+            <h4 className="text-xs font-medium text-gray-700 mb-3">Create New User</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <input
+                type="text"
+                value={newUsername}
+                onChange={(e) => setNewUsername(e.target.value)}
+                placeholder="Username"
+                className="px-3 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none text-sm"
+                required
+              />
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Password"
+                className="px-3 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none text-sm"
+                required
+              />
+              <div className="flex items-center space-x-2">
+                <label className="flex items-center space-x-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={newIsAdmin}
+                    onChange={(e) => setNewIsAdmin(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <span>Admin</span>
+                </label>
+                <button
+                  type="submit"
+                  className="ml-auto px-4 py-2 bg-gray-900 text-white text-sm rounded-md hover:bg-gray-800 transition"
+                >
+                  <UserPlus className="inline w-4 h-4 mr-1" />
+                  Create
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Username</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Role</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-600">Created At</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-600">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {adminUsers.map((u) => (
+                  <tr key={u.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-gray-900">{u.username}</td>
+                    <td className="px-4 py-3">
+                      {u.is_admin ? (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">Admin</span>
+                      ) : (
+                        <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">User</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 text-xs">
+                      {new Date(u.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {u.id !== user.id && (
+                        <button
+                          onClick={() => handleDeleteUser(u.id)}
+                          className="text-red-600 hover:text-red-700 text-xs"
+                        >
+                          <Trash2 className="inline w-4 h-4" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-lg border border-red-200 p-6">
         <h3 className="text-sm font-semibold text-gray-900 mb-2">Danger Zone</h3>
