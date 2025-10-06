@@ -17,7 +17,7 @@ The system employs a client-server architecture with a Python FastAPI backend an
 - **Status Indicators**: Color-coded indicators for quick scanning of alert severities.
 
 ### Technical Implementations
-- **Login System**: Database-based authentication with bcrypt password hashing for secure credential storage. Production login configured with username `admin`.
+- **Login System**: Database-based authentication with Argon2 password hashing for secure credential storage. Admin user is automatically created on server startup in both development and production environments. Production login: username `admin` / password `dimension`.
 - **Dashboard**: Features status cards for system health, total alerts, unread, high priority, and acknowledged alerts.
 - **Alert Grouping**: Alerts are grouped by `tracker_name` (motorcycle) with a badge system indicating the number of alerts per bike.
 - **Priority System**:

@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_USER_ID = "default"
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 ALERT_CATEGORIES = [
     "Heavy Impact",
@@ -187,7 +187,10 @@ async def startup_db():
                 name VARCHAR,
                 picture VARCHAR,
                 gmail_email VARCHAR,
-                gmail_app_password VARCHAR
+                gmail_app_password VARCHAR,
+                username VARCHAR UNIQUE,
+                password_hash TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
@@ -231,14 +234,24 @@ async def startup_db():
             """
         )
         
-        await conn.execute(
-            """
-            INSERT INTO users (id, email, name, picture)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (id) DO NOTHING
-            """,
-            DEFAULT_USER_ID, "admin@tracker.com", "Admin", ""
+        admin_exists = await conn.fetchval(
+            "SELECT COUNT(*) FROM users WHERE username = 'admin'"
         )
+        
+        if admin_exists == 0:
+            admin_password_hash = pwd_context.hash("dimension")
+            await conn.execute(
+                """
+                INSERT INTO users (id, username, email, password_hash, created_at)
+                VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+                ON CONFLICT (username) DO UPDATE 
+                SET password_hash = EXCLUDED.password_hash
+                """,
+                "admin-user", "admin", "admin@tracker.com", admin_password_hash
+            )
+            logger.info("Admin user created/updated automatically")
+        else:
+            logger.info("Admin user already exists")
     
     background_task = asyncio.create_task(auto_sync_background())
     logger.info("Background sync task started (10 minute interval)")
