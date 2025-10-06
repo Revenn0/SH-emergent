@@ -234,11 +234,41 @@ async def startup_db():
             """
         )
         
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS admin_credentials (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        
         admin_exists = await conn.fetchval(
-            "SELECT COUNT(*) FROM users WHERE username = 'admin'"
+            "SELECT COUNT(*) FROM admin_credentials WHERE username = 'admin'"
         )
         
         if admin_exists == 0:
+            admin_password_hash = pwd_context.hash("dimension")
+            await conn.execute(
+                """
+                INSERT INTO admin_credentials (username, password_hash)
+                VALUES ($1, $2)
+                ON CONFLICT (username) DO UPDATE 
+                SET password_hash = EXCLUDED.password_hash
+                """,
+                "admin", admin_password_hash
+            )
+            logger.info("Admin credentials created in admin_credentials table")
+        else:
+            logger.info("Admin credentials already exist in admin_credentials table")
+        
+        admin_user_exists = await conn.fetchval(
+            "SELECT COUNT(*) FROM users WHERE username = 'admin'"
+        )
+        
+        if admin_user_exists == 0:
             admin_password_hash = pwd_context.hash("dimension")
             await conn.execute(
                 """
@@ -249,9 +279,7 @@ async def startup_db():
                 """,
                 "admin-user", "admin", "admin@tracker.com", admin_password_hash
             )
-            logger.info("Admin user created/updated automatically")
-        else:
-            logger.info("Admin user already exists")
+            logger.info("Admin user also created in users table")
     
     background_task = asyncio.create_task(auto_sync_background())
     logger.info("Background sync task started (10 minute interval)")
@@ -371,23 +399,23 @@ async def debug_auth():
 
 @api_router.post("/auth/login")
 async def login(request: LoginRequest):
-    """Login with database authentication"""
+    """Login with database authentication - reads from admin_credentials table"""
     async with db_pool.acquire() as conn:
-        user = await conn.fetchrow(
-            "SELECT id, username, email, password_hash FROM users WHERE username = $1",
+        credentials = await conn.fetchrow(
+            "SELECT username, password_hash FROM admin_credentials WHERE username = $1",
             request.username
         )
         
-        if not user:
+        if not credentials:
             logger.warning(f"Login attempt for non-existent user: {request.username}")
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
-        if not user['password_hash']:
+        if not credentials['password_hash']:
             logger.error(f"User {request.username} has no password hash")
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
         try:
-            if not pwd_context.verify(request.password, user['password_hash']):
+            if not pwd_context.verify(request.password, credentials['password_hash']):
                 logger.warning(f"Invalid password for user: {request.username}")
                 raise HTTPException(status_code=401, detail="Invalid credentials")
         except Exception as e:
@@ -397,9 +425,9 @@ async def login(request: LoginRequest):
         return {
             "success": True,
             "user": {
-                "id": user['id'],
-                "username": user['username'],
-                "email": user['email'] or f"{user['username']}@tracker.com"
+                "id": "admin-user",
+                "username": credentials['username'],
+                "email": "admin@tracker.com"
             }
         }
 
