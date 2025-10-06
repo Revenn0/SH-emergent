@@ -1013,8 +1013,7 @@ async def toggle_favorite(alert_id: int, current_user: dict = Depends(get_curren
     return {"success": True, "favorite": new_value}
 
 
-app.include_router(api_router)
-
+# Add middlewares FIRST
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.add_middleware(
@@ -1030,20 +1029,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include API routes
+app.include_router(api_router)
+
 # Serve frontend static files in production
 frontend_build_path = Path(__file__).parent.parent / "frontend" / "build"
 if frontend_build_path.exists():
-    app.mount("/static", StaticFiles(directory=str(frontend_build_path / "static")), name="static")
+    try:
+        app.mount("/static", StaticFiles(directory=str(frontend_build_path / "static")), name="static")
+        logger.info(f"Mounted static files from {frontend_build_path / 'static'}")
+    except Exception as e:
+        logger.error(f"Failed to mount static files: {e}")
     
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):
         """Serve frontend for all non-API routes"""
-        if full_path.startswith("api/"):
-            raise HTTPException(status_code=404, detail="Not found")
-        
-        file_path = frontend_build_path / full_path
-        if file_path.is_file():
-            return FileResponse(file_path)
-        
-        # Serve index.html for SPA routes
-        return FileResponse(frontend_build_path / "index.html")
+        try:
+            if full_path.startswith("api/"):
+                raise HTTPException(status_code=404, detail="Not found")
+            
+            file_path = frontend_build_path / full_path
+            if file_path.is_file():
+                return FileResponse(file_path)
+            
+            # Serve index.html for SPA routes
+            index_file = frontend_build_path / "index.html"
+            if index_file.exists():
+                return FileResponse(index_file)
+            else:
+                raise HTTPException(status_code=500, detail="Frontend not built")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error serving frontend: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
