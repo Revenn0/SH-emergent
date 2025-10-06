@@ -59,7 +59,7 @@ localPort = 8080
 externalPort = 8080
 
 [[ports]]
-localPort = 35585
+localPort = 38231
 externalPort = 4200
 
 [[ports]]
@@ -76,4 +76,4 @@ externalPort = 3001
 
 [deployment]
 deploymentTarget = "vm"
-run = ["bash", "-c", "uvicorn backend.server:app --host 0.0.0.0 --port 8080 & cd frontend && PORT=5000 REACT_APP_BACKEND_URL=https://$(echo $REPLIT_DOMAINS | cut -d',' -f1):8080 npm start"]
+run = ["bash", "-c", "uvicorn backend.server:app --host 0.0.0.0 --port 8080 & cd frontend && PORT=5000 REACT_APP_BACKEND_URL=http://localhost:8080 npm start"]
