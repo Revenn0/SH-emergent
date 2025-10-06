@@ -17,6 +17,7 @@ import google.generativeai as genai
 import re
 import asyncio
 from functools import lru_cache
+from passlib.context import CryptContext
 
 
 ROOT_DIR = Path(__file__).parent
@@ -35,6 +36,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 DEFAULT_USER_ID = "default"
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ALERT_CATEGORIES = [
     "Heavy Impact",
@@ -341,16 +344,27 @@ async def shutdown_db():
 
 @api_router.post("/auth/login")
 async def login(request: LoginRequest):
-    """Simple login - hardcoded credentials"""
-    if request.username == "admin" and request.password == "admin":
+    """Login with database authentication"""
+    async with db_pool.acquire() as conn:
+        user = await conn.fetchrow(
+            "SELECT id, username, email, password_hash FROM users WHERE username = $1",
+            request.username
+        )
+        
+        if not user or not user['password_hash']:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        if not pwd_context.verify(request.password, user['password_hash']):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
         return {
             "success": True,
             "user": {
-                "username": "admin",
-                "email": "admin@tracker.com"
+                "id": user['id'],
+                "username": user['username'],
+                "email": user['email'] or f"{user['username']}@tracker.com"
             }
         }
-    raise HTTPException(status_code=401, detail="Invalid credentials")
 
 
 def connect_imap(email_addr: str, app_password: str):

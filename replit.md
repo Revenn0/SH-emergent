@@ -17,7 +17,7 @@ The system employs a client-server architecture with a Python FastAPI backend an
 - **Status Indicators**: Color-coded indicators for quick scanning of alert severities.
 
 ### Technical Implementations
-- **Login System**: Simple username/password authentication (`admin`/`admin`) for initial access.
+- **Login System**: Database-based authentication with bcrypt password hashing for secure credential storage. Production login configured with username `admin`.
 - **Dashboard**: Features status cards for system health, total alerts, unread, high priority, and acknowledged alerts.
 - **Alert Grouping**: Alerts are grouped by `tracker_name` (motorcycle) with a badge system indicating the number of alerts per bike.
 - **Priority System**:
@@ -38,7 +38,7 @@ The system employs a client-server architecture with a Python FastAPI backend an
 - **Backend (Port 8080)**: FastAPI with PostgreSQL, handling email parsing, alert categorization, IMAP client operations, and alert grouping logic.
 - **Frontend (Port 5000)**: React SPA with Tailwind CSS and Lucide React icons, providing a responsive user interface across "Bike Tracker", "Admin Dashboard", and "Service Tracker" views. Uses local storage for session management.
 - **Database Schema**:
-    - `users` table: Stores user and Gmail configuration (`id`, `email`, `name`, `picture`, `gmail_email`, `gmail_app_password`).
+    - `users` table: Stores user authentication and Gmail configuration (`id`, `username`, `password_hash`, `email`, `name`, `picture`, `gmail_email`, `gmail_app_password`, `created_at`).
     - `tracker_alerts` table: Stores parsed alert data (`id`, `user_id`, `email_id`, `alert_type`, `alert_time`, `location`, `latitude`, `longitude`, `device_serial`, `tracker_name`, `account_name`, `raw_body`, `created_at`, `status`, `acknowledged`, `acknowledged_at`, `acknowledged_by`, `notes`, `assigned_to`, `favorite`).
     - `sync_checkpoints` table: For incremental email synchronization.
 - **Deployment**: Configured for VM (always-on) deployment due to persistent state, continuous uptime requirement for alert monitoring, and background synchronization.
