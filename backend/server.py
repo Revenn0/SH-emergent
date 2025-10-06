@@ -329,19 +329,18 @@ async def startup_db():
     logger.info("Background sync task started (10 minute interval)")
 
 async def auto_sync_background():
-    """Background task to automatically sync alerts every 10 minutes"""
+    """Background task to automatically sync alerts every 10 minutes for all users"""
     while True:
         try:
             await asyncio.sleep(600)
             
             async with db_pool.acquire() as conn:
-                user = await conn.fetchrow(
-                    "SELECT * FROM users WHERE id = $1",
-                    DEFAULT_USER_ID
+                users = await conn.fetch(
+                    "SELECT * FROM users WHERE gmail_email IS NOT NULL AND gmail_app_password IS NOT NULL"
                 )
                 
-                if user and user['gmail_email'] and user['gmail_app_password']:
-                    logger.info("Starting automatic background sync...")
+                for user in users:
+                    logger.info(f"Starting automatic background sync for user {user['username']}...")
                     
                     try:
                         imap = connect_imap(user['gmail_email'], user['gmail_app_password'])
@@ -349,7 +348,7 @@ async def auto_sync_background():
                         
                         checkpoint = await conn.fetchrow(
                             "SELECT * FROM sync_checkpoints WHERE user_id = $1",
-                            DEFAULT_USER_ID
+                            user['id']
                         )
                         
                         _, message_numbers = imap.search(None, f'FROM "alerts-no-reply@tracking-update.com"')
@@ -359,7 +358,7 @@ async def auto_sync_background():
                             try:
                                 last_idx = email_ids.index(checkpoint['last_email_id'].encode())
                                 email_ids = email_ids[last_idx + 1:]
-                                logger.info(f"Background sync: processing {len(email_ids)} new emails")
+                                logger.info(f"Background sync: processing {len(email_ids)} new emails for {user['username']}")
                             except ValueError:
                                 email_ids = email_ids[-100:]
                         else:
@@ -369,7 +368,7 @@ async def auto_sync_background():
                             async with db_pool.acquire() as conn2:
                                 existing_ids = await conn2.fetch(
                                     "SELECT email_id FROM tracker_alerts WHERE user_id = $1",
-                                    DEFAULT_USER_ID
+                                    user['id']
                                 )
                                 existing_set = {row['email_id'] for row in existing_ids}
                                 
@@ -387,7 +386,7 @@ async def auto_sync_background():
                                             logger.error(f"Error fetching email: {str(e)}")
                                 
                                 if email_data_list:
-                                    processed = await process_email_batch(email_data_list)
+                                    processed = await process_email_batch(email_data_list, user['id'])
                                     last_email_id = email_data_list[-1][0]
                                     await conn2.execute(
                                         """
@@ -396,7 +395,7 @@ async def auto_sync_background():
                                         ON CONFLICT (user_id) DO UPDATE
                                         SET last_email_id = $2, last_sync_at = CURRENT_TIMESTAMP
                                         """,
-                                        DEFAULT_USER_ID, last_email_id
+                                        user['id'], last_email_id
                                     )
                                     logger.info(f"Background sync completed: {processed} alerts processed")
                         
@@ -587,7 +586,7 @@ def get_email_body(msg):
 
 
 @api_router.post("/gmail/connect")
-async def connect_gmail(request: ConnectGmailRequest):
+async def connect_gmail(request: ConnectGmailRequest, current_user: dict = Depends(get_current_user)):
     """Connect Gmail account via IMAP"""
     imap = connect_imap(request.email, request.app_password)
     imap.logout()
@@ -599,14 +598,14 @@ async def connect_gmail(request: ConnectGmailRequest):
             SET gmail_email = $2, gmail_app_password = $3
             WHERE id = $1
             """,
-            DEFAULT_USER_ID, request.email, request.app_password
+            current_user['id'], request.email, request.app_password
         )
     
     return {"success": True, "message": "Gmail connected successfully"}
 
 
 @api_router.delete("/gmail/disconnect")
-async def disconnect_gmail():
+async def disconnect_gmail(current_user: dict = Depends(get_current_user)):
     """Disconnect Gmail account"""
     async with db_pool.acquire() as conn:
         await conn.execute(
@@ -615,13 +614,13 @@ async def disconnect_gmail():
             SET gmail_email = NULL, gmail_app_password = NULL
             WHERE id = $1
             """,
-            DEFAULT_USER_ID
+            current_user['id']
         )
     
     return {"success": True}
 
 
-async def process_email_batch(email_data_list: List[tuple]):
+async def process_email_batch(email_data_list: List[tuple], user_id: str):
     """Process a batch of emails in parallel with individual connections"""
     async def process_single_email(email_id_str, body):
         try:
@@ -639,7 +638,7 @@ async def process_email_batch(email_data_list: List[tuple]):
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                     ON CONFLICT (user_id, email_id) DO NOTHING
                     """,
-                    DEFAULT_USER_ID, email_id_str, category, 
+                    user_id, email_id_str, category, 
                     parsed["time"], parsed["location"], 
                     parsed["latitude"], parsed["longitude"],
                     parsed["device_serial"], parsed["tracker_name"],
@@ -656,12 +655,12 @@ async def process_email_batch(email_data_list: List[tuple]):
 
 
 @api_router.post("/alerts/sync")
-async def sync_alerts(request: SyncRequest):
+async def sync_alerts(request: SyncRequest, current_user: dict = Depends(get_current_user)):
     """Fetch and categorize tracker alerts from Gmail with parallel processing and checkpoint"""
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
             "SELECT * FROM users WHERE id = $1",
-            DEFAULT_USER_ID
+            current_user['id']
         )
         
         if not user or not user['gmail_email'] or not user['gmail_app_password']:
@@ -669,7 +668,7 @@ async def sync_alerts(request: SyncRequest):
         
         checkpoint = await conn.fetchrow(
             "SELECT * FROM sync_checkpoints WHERE user_id = $1",
-            DEFAULT_USER_ID
+            current_user['id']
         )
     
     try:
@@ -698,7 +697,7 @@ async def sync_alerts(request: SyncRequest):
                 SELECT email_id FROM tracker_alerts 
                 WHERE user_id = $1
                 """,
-                DEFAULT_USER_ID
+                current_user['id']
             )
             existing_set = {row['email_id'] for row in existing_ids}
             
@@ -731,7 +730,7 @@ async def sync_alerts(request: SyncRequest):
             
             for i in range(0, len(email_data_list), batch_size):
                 batch = email_data_list[i:i + batch_size]
-                processed = await process_email_batch(batch)
+                processed = await process_email_batch(batch, current_user['id'])
                 total_processed += processed
             
             logger.info(f"Successfully processed {total_processed} emails")
@@ -745,7 +744,7 @@ async def sync_alerts(request: SyncRequest):
                     ON CONFLICT (user_id) DO UPDATE
                     SET last_email_id = $2, last_sync_at = CURRENT_TIMESTAMP
                     """,
-                    DEFAULT_USER_ID, last_email_id
+                    current_user['id'], last_email_id
                 )
                 logger.info(f"Checkpoint saved: {last_email_id}")
             
@@ -757,7 +756,7 @@ async def sync_alerts(request: SyncRequest):
 
 
 @api_router.get("/alerts/categories")
-async def get_categories():
+async def get_categories(current_user: dict = Depends(get_current_user)):
     """Get all available alert categories"""
     async with db_pool.acquire() as conn:
         alerts = await conn.fetch(
@@ -768,7 +767,7 @@ async def get_categories():
             GROUP BY alert_type
             ORDER BY count DESC
             """,
-            DEFAULT_USER_ID
+            current_user['id']
         )
         
         category_stats = {
@@ -787,12 +786,12 @@ async def get_categories():
 
 
 @api_router.get("/alerts/list")
-async def list_alerts(category: Optional[str] = Query(None)):
+async def list_alerts(category: Optional[str] = Query(None), current_user: dict = Depends(get_current_user)):
     """Get all tracker alerts with optional category filter"""
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
             "SELECT * FROM users WHERE id = $1",
-            DEFAULT_USER_ID
+            current_user['id']
         )
         
         if category and category != "All":
@@ -802,7 +801,7 @@ async def list_alerts(category: Optional[str] = Query(None)):
                 WHERE user_id = $1 AND alert_type = $2
                 ORDER BY created_at DESC
                 """,
-                DEFAULT_USER_ID, category
+                current_user['id'], category
             )
         else:
             alerts = await conn.fetch(
@@ -811,7 +810,7 @@ async def list_alerts(category: Optional[str] = Query(None)):
                 WHERE user_id = $1 
                 ORDER BY created_at DESC
                 """,
-                DEFAULT_USER_ID
+                current_user['id']
             )
         
         categories = {}
@@ -895,35 +894,35 @@ async def list_alerts(category: Optional[str] = Query(None)):
 
 
 @api_router.delete("/alerts/clear-all/history")
-async def clear_all_alerts():
+async def clear_all_alerts(current_user: dict = Depends(get_current_user)):
     """Clear all alerts and sync checkpoint (reset system)"""
     async with db_pool.acquire() as conn:
         await conn.execute(
             "DELETE FROM tracker_alerts WHERE user_id = $1",
-            DEFAULT_USER_ID
+            current_user['id']
         )
         await conn.execute(
             "DELETE FROM sync_checkpoints WHERE user_id = $1",
-            DEFAULT_USER_ID
+            current_user['id']
         )
     
     return {"success": True, "message": "All alerts and sync history cleared"}
 
 
 @api_router.delete("/alerts/{alert_id}")
-async def delete_alert(alert_id: int):
+async def delete_alert(alert_id: int, current_user: dict = Depends(get_current_user)):
     """Delete an alert (only from app, not from Gmail)"""
     async with db_pool.acquire() as conn:
         await conn.execute(
             "DELETE FROM tracker_alerts WHERE id = $1 AND user_id = $2",
-            alert_id, DEFAULT_USER_ID
+            alert_id, current_user['id']
         )
     
     return {"success": True}
 
 
 @api_router.post("/alerts/{alert_id}/acknowledge")
-async def acknowledge_alert(alert_id: int, request: AcknowledgeRequest):
+async def acknowledge_alert(alert_id: int, request: AcknowledgeRequest, current_user: dict = Depends(get_current_user)):
     """Acknowledge an alert"""
     async with db_pool.acquire() as conn:
         await conn.execute(
@@ -934,14 +933,14 @@ async def acknowledge_alert(alert_id: int, request: AcknowledgeRequest):
                 acknowledged_by = $1
             WHERE id = $2 AND user_id = $3
             """,
-            request.acknowledged_by, alert_id, DEFAULT_USER_ID
+            request.acknowledged_by, alert_id, current_user['id']
         )
     
     return {"success": True}
 
 
 @api_router.post("/alerts/{alert_id}/status")
-async def update_alert_status(alert_id: int, request: UpdateStatusRequest):
+async def update_alert_status(alert_id: int, request: UpdateStatusRequest, current_user: dict = Depends(get_current_user)):
     """Update alert status"""
     valid_statuses = ["New", "In Progress", "Resolved", "Closed"]
     if request.status not in valid_statuses:
@@ -954,14 +953,14 @@ async def update_alert_status(alert_id: int, request: UpdateStatusRequest):
             SET status = $1
             WHERE id = $2 AND user_id = $3
             """,
-            request.status, alert_id, DEFAULT_USER_ID
+            request.status, alert_id, current_user['id']
         )
     
     return {"success": True}
 
 
 @api_router.post("/alerts/{alert_id}/notes")
-async def add_alert_note(alert_id: int, request: AddNoteRequest):
+async def add_alert_note(alert_id: int, request: AddNoteRequest, current_user: dict = Depends(get_current_user)):
     """Add notes to an alert"""
     async with db_pool.acquire() as conn:
         await conn.execute(
@@ -970,14 +969,14 @@ async def add_alert_note(alert_id: int, request: AddNoteRequest):
             SET notes = $1
             WHERE id = $2 AND user_id = $3
             """,
-            request.notes, alert_id, DEFAULT_USER_ID
+            request.notes, alert_id, current_user['id']
         )
     
     return {"success": True}
 
 
 @api_router.post("/alerts/{alert_id}/assign")
-async def assign_alert(alert_id: int, request: AssignRequest):
+async def assign_alert(alert_id: int, request: AssignRequest, current_user: dict = Depends(get_current_user)):
     """Assign alert to a team member"""
     async with db_pool.acquire() as conn:
         await conn.execute(
@@ -986,19 +985,19 @@ async def assign_alert(alert_id: int, request: AssignRequest):
             SET assigned_to = $1
             WHERE id = $2 AND user_id = $3
             """,
-            request.assigned_to, alert_id, DEFAULT_USER_ID
+            request.assigned_to, alert_id, current_user['id']
         )
     
     return {"success": True}
 
 
 @api_router.post("/alerts/{alert_id}/favorite")
-async def toggle_favorite(alert_id: int):
+async def toggle_favorite(alert_id: int, current_user: dict = Depends(get_current_user)):
     """Toggle favorite status"""
     async with db_pool.acquire() as conn:
         current = await conn.fetchrow(
             "SELECT favorite FROM tracker_alerts WHERE id = $1 AND user_id = $2",
-            alert_id, DEFAULT_USER_ID
+            alert_id, current_user['id']
         )
         
         new_value = not current['favorite'] if current else True
@@ -1009,7 +1008,7 @@ async def toggle_favorite(alert_id: int):
             SET favorite = $1
             WHERE id = $2 AND user_id = $3
             """,
-            new_value, alert_id, DEFAULT_USER_ID
+            new_value, alert_id, current_user['id']
         )
     
     return {"success": True, "favorite": new_value}
