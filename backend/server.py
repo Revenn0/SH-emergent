@@ -296,16 +296,16 @@ async def read_emails_with_logging(user: dict, limit: int = 100, source: str = "
     })
     
     async with db_pool.acquire() as conn:
-        await conn.execute(
+        run_id = await conn.fetchval(
             """
             INSERT INTO email_sync_runs (
                 user_id, started_at, completed_at, source, status,
                 emails_read, emails_new, error_summary, log_json
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            VALUES ($1, $2::timestamp, $3::timestamp, $4, $5, $6, $7, $8, $9)
             RETURNING id
             """,
-            user['id'], started_at, completed_at, source, status,
+            user['id'], started_at.replace(tzinfo=None), completed_at.replace(tzinfo=None), source, status,
             emails_read, emails_new,
             "\n".join(errors) if errors else None,
             json.dumps(log_steps)
@@ -327,14 +327,14 @@ async def read_emails_with_logging(user: dict, limit: int = 100, source: str = "
 def create_access_token(data: dict) -> str:
     """Create JWT access token"""
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire, "type": "access"})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def create_refresh_token(data: dict) -> str:
     """Create JWT refresh token"""
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire, "type": "refresh"})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -517,6 +517,23 @@ async def startup_db():
                 user_id VARCHAR NOT NULL UNIQUE,
                 last_email_id VARCHAR,
                 last_sync_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS email_sync_runs (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR NOT NULL,
+                started_at TIMESTAMP NOT NULL,
+                completed_at TIMESTAMP NOT NULL,
+                source VARCHAR NOT NULL,
+                status VARCHAR NOT NULL,
+                emails_read INTEGER DEFAULT 0,
+                emails_new INTEGER DEFAULT 0,
+                error_summary TEXT,
+                log_json TEXT
             )
             """
         )
