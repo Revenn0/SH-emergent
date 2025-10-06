@@ -70,16 +70,13 @@ ALERT_CATEGORIES = [
 
 class RegisterRequest(BaseModel):
     username: str
+    email: EmailStr
     password: str
+    full_name: Optional[str] = None
 
 class LoginRequest(BaseModel):
     username: str
     password: str
-
-class AdminCreateUserRequest(BaseModel):
-    username: str
-    password: str
-    is_admin: bool = False
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -143,15 +140,10 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
     
-    try:
-        user_id_int = int(user_id)
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=401, detail="Invalid token format - please login again")
-    
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
-            "SELECT id, username, is_admin, created_at FROM admin_credentials WHERE id = $1",
-            user_id_int
+            "SELECT id, username, email, full_name, created_at FROM users WHERE id = $1",
+            user_id
         )
         
         if not user:
@@ -259,18 +251,6 @@ async def startup_db():
     async with db_pool.acquire() as conn:
         await conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS admin_credentials (
-                id SERIAL PRIMARY KEY,
-                username VARCHAR UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                is_admin BOOLEAN DEFAULT FALSE,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        
-        await conn.execute(
-            """
             CREATE TABLE IF NOT EXISTS users (
                 id VARCHAR PRIMARY KEY,
                 username VARCHAR UNIQUE NOT NULL,
@@ -325,19 +305,21 @@ async def startup_db():
         )
         
         admin_exists = await conn.fetchval(
-            "SELECT COUNT(*) FROM admin_credentials WHERE username = 'admin'"
+            "SELECT COUNT(*) FROM users WHERE username = 'admin'"
         )
         
         if admin_exists == 0:
+            import uuid
+            admin_id = str(uuid.uuid4())
             admin_password_hash = pwd_context.hash("dimension")
             await conn.execute(
                 """
-                INSERT INTO admin_credentials (username, password_hash, is_admin)
-                VALUES ($1, $2, TRUE)
+                INSERT INTO users (id, username, email, password_hash, full_name)
+                VALUES ($1, $2, $3, $4, $5)
                 ON CONFLICT (username) DO UPDATE 
-                SET password_hash = EXCLUDED.password_hash, is_admin = TRUE
+                SET password_hash = EXCLUDED.password_hash
                 """,
-                "admin", admin_password_hash
+                admin_id, "admin", "admin@tracker.com", admin_password_hash, "Administrator"
             )
             logger.info("Default admin user created (username: admin, password: dimension)")
         else:
@@ -447,31 +429,32 @@ async def shutdown_db():
 @api_router.post("/auth/register")
 async def register(request: RegisterRequest):
     """Register a new user"""
-    logger.info(f"Registration attempt: username={request.username}")
+    logger.info(f"Registration attempt: username={request.username}, email={request.email}")
     
     async with db_pool.acquire() as conn:
-        existing = await conn.fetchval(
-            "SELECT id FROM admin_credentials WHERE username = $1",
-            request.username
+        existing = await conn.fetchrow(
+            "SELECT id FROM users WHERE username = $1 OR email = $2",
+            request.username, request.email
         )
         
         if existing:
-            logger.warning(f"Registration failed: Username already exists - {request.username}")
-            raise HTTPException(status_code=400, detail="Username already exists")
+            logger.warning(f"Registration failed: Username or email already exists - {request.username}/{request.email}")
+            raise HTTPException(status_code=400, detail="Username or email already exists")
         
+        import uuid
+        user_id = str(uuid.uuid4())
         password_hash = pwd_context.hash(request.password)
         
-        user_id = await conn.fetchval(
+        await conn.execute(
             """
-            INSERT INTO admin_credentials (username, password_hash, is_admin)
-            VALUES ($1, $2, FALSE)
-            RETURNING id
+            INSERT INTO users (id, username, email, password_hash, full_name)
+            VALUES ($1, $2, $3, $4, $5)
             """,
-            request.username, password_hash
+            user_id, request.username, request.email, password_hash, request.full_name
         )
         
-        access_token = create_access_token({"sub": str(user_id)})
-        refresh_token = create_refresh_token({"sub": str(user_id)})
+        access_token = create_access_token({"sub": user_id})
+        refresh_token = create_refresh_token({"sub": user_id})
         
         logger.info(f"New user registered: {request.username}")
         
@@ -481,7 +464,8 @@ async def register(request: RegisterRequest):
             user={
                 "id": user_id,
                 "username": request.username,
-                "is_admin": False
+                "email": request.email,
+                "full_name": request.full_name
             }
         )
 
@@ -491,7 +475,7 @@ async def login(request: LoginRequest):
     """Login with JWT authentication"""
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
-            "SELECT id, username, password_hash, is_admin FROM admin_credentials WHERE username = $1",
+            "SELECT id, username, email, password_hash, full_name FROM users WHERE username = $1",
             request.username
         )
         
@@ -503,8 +487,8 @@ async def login(request: LoginRequest):
             logger.warning(f"Invalid password for user: {request.username}")
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
-        access_token = create_access_token({"sub": str(user['id'])})
-        refresh_token = create_refresh_token({"sub": str(user['id'])})
+        access_token = create_access_token({"sub": user['id']})
+        refresh_token = create_refresh_token({"sub": user['id']})
         
         logger.info(f"User logged in: {request.username}")
         
@@ -514,7 +498,8 @@ async def login(request: LoginRequest):
             user={
                 "id": user['id'],
                 "username": user['username'],
-                "is_admin": user['is_admin']
+                "email": user['email'],
+                "full_name": user['full_name']
             }
         )
 
@@ -530,7 +515,7 @@ async def refresh_token_endpoint(request: RefreshTokenRequest):
     
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
-            "SELECT id, username, is_admin FROM admin_credentials WHERE id = $1",
+            "SELECT id, username, email, full_name FROM users WHERE id = $1",
             user_id
         )
         
@@ -546,7 +531,8 @@ async def refresh_token_endpoint(request: RefreshTokenRequest):
         user={
             "id": user['id'],
             "username": user['username'],
-            "is_admin": user['is_admin']
+            "email": user['email'],
+            "full_name": user['full_name']
         }
     )
 
@@ -555,83 +541,6 @@ async def refresh_token_endpoint(request: RefreshTokenRequest):
 async def get_me(current_user: dict = Depends(get_current_user)):
     """Get current authenticated user"""
     return current_user
-
-
-@api_router.post("/admin/create-user")
-async def admin_create_user(request: AdminCreateUserRequest, current_user: dict = Depends(get_current_user)):
-    """Admin endpoint to create new users"""
-    if not current_user.get('is_admin'):
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
-    async with db_pool.acquire() as conn:
-        existing = await conn.fetchval(
-            "SELECT id FROM admin_credentials WHERE username = $1",
-            request.username
-        )
-        
-        if existing:
-            raise HTTPException(status_code=400, detail="Username already exists")
-        
-        password_hash = pwd_context.hash(request.password)
-        
-        user_id = await conn.fetchval(
-            """
-            INSERT INTO admin_credentials (username, password_hash, is_admin)
-            VALUES ($1, $2, $3)
-            RETURNING id
-            """,
-            request.username, password_hash, request.is_admin
-        )
-        
-        logger.info(f"Admin {current_user['username']} created new user: {request.username}")
-        
-        return {
-            "success": True,
-            "user": {
-                "id": user_id,
-                "username": request.username,
-                "is_admin": request.is_admin
-            }
-        }
-
-
-@api_router.get("/admin/users")
-async def admin_list_users(current_user: dict = Depends(get_current_user)):
-    """Admin endpoint to list all users"""
-    if not current_user.get('is_admin'):
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
-    async with db_pool.acquire() as conn:
-        users = await conn.fetch(
-            "SELECT id, username, is_admin, created_at FROM admin_credentials ORDER BY created_at DESC"
-        )
-        
-        return {
-            "users": [dict(u) for u in users]
-        }
-
-
-@api_router.delete("/admin/users/{user_id}")
-async def admin_delete_user(user_id: int, current_user: dict = Depends(get_current_user)):
-    """Admin endpoint to delete a user"""
-    if not current_user.get('is_admin'):
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
-    if user_id == current_user['id']:
-        raise HTTPException(status_code=400, detail="Cannot delete your own account")
-    
-    async with db_pool.acquire() as conn:
-        deleted = await conn.fetchval(
-            "DELETE FROM admin_credentials WHERE id = $1 RETURNING id",
-            user_id
-        )
-        
-        if not deleted:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        logger.info(f"Admin {current_user['username']} deleted user ID: {user_id}")
-        
-        return {"success": True}
 
 
 def connect_imap(email_addr: str, app_password: str):
@@ -762,7 +671,7 @@ async def sync_alerts(request: SyncRequest, current_user: dict = Depends(get_cur
         
         checkpoint = await conn.fetchrow(
             "SELECT * FROM sync_checkpoints WHERE user_id = $1",
-            str(current_user['id'])
+            current_user['id']
         )
     
     try:
@@ -791,7 +700,7 @@ async def sync_alerts(request: SyncRequest, current_user: dict = Depends(get_cur
                 SELECT email_id FROM tracker_alerts 
                 WHERE user_id = $1
                 """,
-                str(current_user['id'])
+                current_user['id']
             )
             existing_set = {row['email_id'] for row in existing_ids}
             
@@ -824,7 +733,7 @@ async def sync_alerts(request: SyncRequest, current_user: dict = Depends(get_cur
             
             for i in range(0, len(email_data_list), batch_size):
                 batch = email_data_list[i:i + batch_size]
-                processed = await process_email_batch(batch, str(current_user['id']))
+                processed = await process_email_batch(batch, current_user['id'])
                 total_processed += processed
             
             logger.info(f"Successfully processed {total_processed} emails")
@@ -838,7 +747,7 @@ async def sync_alerts(request: SyncRequest, current_user: dict = Depends(get_cur
                     ON CONFLICT (user_id) DO UPDATE
                     SET last_email_id = $2, last_sync_at = CURRENT_TIMESTAMP
                     """,
-                    str(current_user['id']), last_email_id
+                    current_user['id'], last_email_id
                 )
                 logger.info(f"Checkpoint saved: {last_email_id}")
             
@@ -861,7 +770,7 @@ async def get_categories(current_user: dict = Depends(get_current_user)):
             GROUP BY alert_type
             ORDER BY count DESC
             """,
-            str(current_user['id'])
+            current_user['id']
         )
         
         category_stats = {
@@ -888,9 +797,14 @@ async def list_alerts(
 ):
     """Get tracker alerts with pagination and optional category filter"""
     async with db_pool.acquire() as conn:
+        user = await conn.fetchrow(
+            "SELECT * FROM users WHERE id = $1",
+            current_user['id']
+        )
+        
         offset = (page - 1) * limit
         where_clause = "WHERE user_id = $1"
-        params = [str(current_user['id'])]
+        params = [current_user['id']]
         
         if category and category != "All":
             where_clause += " AND alert_type = $2"
@@ -1012,11 +926,6 @@ async def list_alerts(
         
         total_pages = (total_count + limit - 1) // limit
         
-        gmail_config = await conn.fetchrow(
-            "SELECT gmail_email FROM users WHERE id = $1 LIMIT 1",
-            str(current_user['id'])
-        )
-        
         return {
             "alerts": alert_list,
             "stats": {
@@ -1038,8 +947,8 @@ async def list_alerts(
                 "has_next": page < total_pages,
                 "has_prev": page > 1
             },
-            "connected": bool(gmail_config and gmail_config['gmail_email']),
-            "email": gmail_config['gmail_email'] if gmail_config else None,
+            "connected": bool(user and user['gmail_email']),
+            "email": user['gmail_email'] if user else None,
             "activeFilter": category or "All"
         }
 
@@ -1050,11 +959,11 @@ async def clear_all_alerts(current_user: dict = Depends(get_current_user)):
     async with db_pool.acquire() as conn:
         await conn.execute(
             "DELETE FROM tracker_alerts WHERE user_id = $1",
-            str(current_user['id'])
+            current_user['id']
         )
         await conn.execute(
             "DELETE FROM sync_checkpoints WHERE user_id = $1",
-            str(current_user['id'])
+            current_user['id']
         )
     
     return {"success": True, "message": "All alerts and sync history cleared"}
@@ -1066,7 +975,7 @@ async def delete_alert(alert_id: int, current_user: dict = Depends(get_current_u
     async with db_pool.acquire() as conn:
         await conn.execute(
             "DELETE FROM tracker_alerts WHERE id = $1 AND user_id = $2",
-            alert_id, str(current_user['id'])
+            alert_id, current_user['id']
         )
     
     return {"success": True}
@@ -1084,7 +993,7 @@ async def acknowledge_alert(alert_id: int, request: AcknowledgeRequest, current_
                 acknowledged_by = $1
             WHERE id = $2 AND user_id = $3
             """,
-            request.acknowledged_by, alert_id, str(current_user['id'])
+            request.acknowledged_by, alert_id, current_user['id']
         )
     
     return {"success": True}
@@ -1104,7 +1013,7 @@ async def update_alert_status(alert_id: int, request: UpdateStatusRequest, curre
             SET status = $1
             WHERE id = $2 AND user_id = $3
             """,
-            request.status, alert_id, str(current_user['id'])
+            request.status, alert_id, current_user['id']
         )
     
     return {"success": True}
@@ -1120,7 +1029,7 @@ async def add_alert_note(alert_id: int, request: AddNoteRequest, current_user: d
             SET notes = $1
             WHERE id = $2 AND user_id = $3
             """,
-            request.notes, alert_id, str(current_user['id'])
+            request.notes, alert_id, current_user['id']
         )
     
     return {"success": True}
@@ -1136,7 +1045,7 @@ async def assign_alert(alert_id: int, request: AssignRequest, current_user: dict
             SET assigned_to = $1
             WHERE id = $2 AND user_id = $3
             """,
-            request.assigned_to, alert_id, str(current_user['id'])
+            request.assigned_to, alert_id, current_user['id']
         )
     
     return {"success": True}
@@ -1148,7 +1057,7 @@ async def toggle_favorite(alert_id: int, current_user: dict = Depends(get_curren
     async with db_pool.acquire() as conn:
         current = await conn.fetchrow(
             "SELECT favorite FROM tracker_alerts WHERE id = $1 AND user_id = $2",
-            alert_id, str(current_user['id'])
+            alert_id, current_user['id']
         )
         
         new_value = not current['favorite'] if current else True
@@ -1159,7 +1068,7 @@ async def toggle_favorite(alert_id: int, current_user: dict = Depends(get_curren
             SET favorite = $1
             WHERE id = $2 AND user_id = $3
             """,
-            new_value, alert_id, str(current_user['id'])
+            new_value, alert_id, current_user['id']
         )
     
     return {"success": True, "favorite": new_value}

@@ -18,20 +18,13 @@ The system employs a client-server architecture with a Python FastAPI backend an
 
 ### Technical Implementations
 - **Authentication System**: JWT-based authentication with multi-user support:
-    - Uses `admin_credentials` table with username + password only (no email field)
     - Access tokens (60min expiry) and refresh tokens (7 days expiry) using HS256 algorithm
     - Argon2 password hashing for secure credential storage
-    - User registration with username and password only (simplified)
+    - User registration with email validation
     - Automatic token refresh via axios interceptors on 401 responses
     - All API routes protected via JWT dependency injection
     - Admin user auto-created on startup (username: `admin`, password: `dimension`)
-    - Token validation rejects legacy UUID tokens and forces re-authentication
     - **Security Note**: Current implementation stores refresh tokens in localStorage (XSS vulnerability). For production, migrate to httpOnly cookies for enhanced security.
-- **Admin Panel**: Admin users (is_admin=true) can create, list, and delete users via dedicated admin endpoints:
-    - All admin endpoints verify `is_admin` flag before allowing access (403 if not admin)
-    - Users cannot delete themselves (prevented at backend)
-    - Admin UI only visible to admin users in frontend
-    - Type-safe handling of integer admin_credentials.id → varchar tracker_alerts.user_id conversion
 - **Dashboard**: Features status cards for system health, total alerts, unread, high priority, and acknowledged alerts.
 - **Alert Grouping**: Alerts are grouped by `tracker_name` (motorcycle) with a badge system indicating the number of alerts per bike.
 - **Priority System**:
@@ -52,7 +45,6 @@ The system employs a client-server architecture with a Python FastAPI backend an
 - **Backend (Port 8080)**: FastAPI with PostgreSQL, handling email parsing, alert categorization, IMAP client operations, and alert grouping logic.
 - **Frontend (Port 5000)**: React SPA with Tailwind CSS and Lucide React icons, providing a responsive user interface across "Bike Tracker", "Admin Dashboard", and "Service Tracker" views. Uses local storage for session management.
 - **Database Schema**:
-    - `admin_credentials` table: Stores user authentication (`id`, `username`, `password_hash`, `is_admin`, `created_at`, `updated_at`).
     - `users` table: Stores user authentication and Gmail configuration (`id`, `username`, `password_hash`, `email`, `full_name`, `gmail_email`, `gmail_app_password`, `created_at`, `updated_at`).
     - `tracker_alerts` table: Stores parsed alert data (`id`, `user_id`, `email_id`, `alert_type`, `alert_time`, `location`, `latitude`, `longitude`, `device_serial`, `tracker_name`, `account_name`, `raw_body`, `created_at`, `status`, `acknowledged`, `acknowledged_at`, `acknowledged_by`, `notes`, `assigned_to`, `favorite`).
     - `sync_checkpoints` table: For incremental email synchronization (per-user tracking).
