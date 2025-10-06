@@ -1085,7 +1085,6 @@ app.add_middleware(
         "http://localhost:5000",
         "https://c363f9ef-5f69-4abe-887f-60d877a4e2ce-00-25ix68esofxzf.riker.replit.dev",
         "https://*.replit.dev",
-        "https://*.replit.app",
     ],
     allow_methods=["*"],
     allow_headers=["*"],
