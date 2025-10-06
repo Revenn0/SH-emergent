@@ -222,7 +222,8 @@ function Dashboard({ user, onLogout }) {
       const hasNoCommunication = Array.from(alertTypes).some(t => t && t.includes("No Communication"));
       
       if (hasLightSensor && hasOverTurn) {
-        group.severity = "super-important";
+        group.severity = "heavy-impact";
+        group.displayName = "Heavy Impact";
       } else if (hasOverTurn || hasHeavyImpact || hasNoCommunication) {
         group.severity = "high";
       } else {
@@ -231,8 +232,8 @@ function Dashboard({ user, onLogout }) {
     });
 
     setGroupedAlerts(Object.values(grouped).sort((a, b) => {
-      if (a.severity === "super-important" && b.severity !== "super-important") return -1;
-      if (b.severity === "super-important" && a.severity !== "super-important") return 1;
+      if (a.severity === "heavy-impact" && b.severity !== "heavy-impact") return -1;
+      if (b.severity === "heavy-impact" && a.severity !== "heavy-impact") return 1;
       if (a.severity === "high" && b.severity === "normal") return -1;
       if (b.severity === "high" && a.severity === "normal") return 1;
       return b.count - a.count;
@@ -400,7 +401,7 @@ function Dashboard({ user, onLogout }) {
 
   const DashboardPage = () => {
     const getSeverityBadge = (severity) => {
-      if (severity === "super-important") return "bg-red-100 text-red-700 border-red-200";
+      if (severity === "heavy-impact") return "bg-red-100 text-red-700 border-red-200";
       if (severity === "high") return "bg-orange-100 text-orange-700 border-orange-200";
       return "bg-gray-100 text-gray-700 border-gray-200";
     };
@@ -593,7 +594,7 @@ function Dashboard({ user, onLogout }) {
                       >
                         <td className="py-3 px-4">
                           <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium border ${getSeverityBadge(group.severity)}`}>
-                            {group.severity === "super-important" ? "Critical" : "Active"}
+                            {group.severity === "heavy-impact" ? "Critical" : "Active"}
                           </span>
                         </td>
                         <td className="py-3 px-4">
@@ -607,11 +608,11 @@ function Dashboard({ user, onLogout }) {
                         <td className="py-3 px-4 text-sm text-gray-700">{group.latestAlert.alert_type}</td>
                         <td className="py-3 px-4">
                           <span className={`inline-flex px-2 py-1 rounded text-xs font-medium ${
-                            group.severity === "super-important" ? "bg-red-100 text-red-700" :
+                            group.severity === "heavy-impact" ? "bg-red-100 text-red-700" :
                             group.severity === "high" ? "bg-orange-100 text-orange-700" :
                             "bg-blue-100 text-blue-700"
                           }`}>
-                            {group.severity === "super-important" ? "Super Important" : 
+                            {group.severity === "heavy-impact" ? "Heavy Impact" : 
                              group.severity === "high" ? "High Priority" : "Normal"}
                           </span>
                         </td>
@@ -620,11 +621,11 @@ function Dashboard({ user, onLogout }) {
                         </td>
                         <td className="py-3 px-4">
                           <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                            group.severity === "super-important" ? "bg-red-100 text-red-700" :
+                            group.severity === "heavy-impact" ? "bg-red-100 text-red-700" :
                             group.severity === "high" ? "bg-orange-100 text-orange-700" :
                             "bg-gray-100 text-gray-700"
                           }`}>
-                            {group.severity === "super-important" ? "High" : 
+                            {group.severity === "heavy-impact" ? "High" : 
                              group.severity === "high" ? "Medium" : "Low"}
                           </span>
                         </td>
@@ -879,12 +880,12 @@ function Dashboard({ user, onLogout }) {
                 <p className="text-2xl font-bold text-gray-900">{selectedAlert.count}</p>
               </div>
               <div className={`px-4 py-2 rounded-lg ${
-                selectedAlert.severity === "super-important" ? "bg-red-100 text-red-700" :
+                selectedAlert.severity === "heavy-impact" ? "bg-red-100 text-red-700" :
                 selectedAlert.severity === "high" ? "bg-orange-100 text-orange-700" :
                 "bg-blue-100 text-blue-700"
               }`}>
                 <p className="text-xs font-medium">
-                  {selectedAlert.severity === "super-important" ? "SUPER IMPORTANT" :
+                  {selectedAlert.severity === "heavy-impact" ? "HEAVY IMPACT" :
                    selectedAlert.severity === "high" ? "HIGH PRIORITY" : "NORMAL"}
                 </p>
               </div>
