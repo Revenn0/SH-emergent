@@ -21,6 +21,7 @@ from functools import lru_cache
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 import secrets
+import json
 
 
 ROOT_DIR = Path(__file__).parent
@@ -1077,15 +1078,29 @@ app.include_router(api_router)
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+allowed_origins = [
+    "http://localhost:3000",
+    "http://localhost:5000",
+    "https://c363f9ef-5f69-4abe-887f-60d877a4e2ce-00-25ix68esofxzf.riker.replit.dev",
+]
+
+replit_domains = os.environ.get('REPLIT_DOMAINS', '')
+if replit_domains:
+    try:
+        domains_list = json.loads(replit_domains)
+    except json.JSONDecodeError:
+        domains_list = [replit_domains]
+    
+    for domain in domains_list:
+        if domain:
+            allowed_origins.append(f"https://{domain}")
+            allowed_origins.append(f"https://{domain}:5000")
+            allowed_origins.append(f"https://{domain}:8080")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:5000",
-        "https://c363f9ef-5f69-4abe-887f-60d877a4e2ce-00-25ix68esofxzf.riker.replit.dev",
-        "https://*.replit.dev",
-    ],
+    allow_origins=allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
