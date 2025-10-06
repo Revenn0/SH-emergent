@@ -674,7 +674,7 @@ async def list_alerts(category: Optional[str] = Query(None)):
                 heavy_impact_count += 1
         
         high_priority_count = 0
-        super_important_count = 0
+        heavy_impact_bikes_count = 0
         
         for device, alert_types in device_alerts.items():
             has_light_sensor = "Light Sensor" in alert_types
@@ -683,7 +683,7 @@ async def list_alerts(category: Optional[str] = Query(None)):
             has_no_comm = any("No Communication" in t for t in alert_types)
             
             if has_light_sensor and has_over_turn:
-                super_important_count += 1
+                heavy_impact_bikes_count += 1
             elif has_over_turn or has_heavy_impact or has_no_comm:
                 high_priority_count += 1
         
@@ -693,11 +693,11 @@ async def list_alerts(category: Optional[str] = Query(None)):
                 "total": len(alert_list),
                 "unread": len(alert_list),
                 "highPriority": high_priority_count,
-                "superImportant": super_important_count,
+                "heavyImpact": heavy_impact_bikes_count,
                 "acknowledged": 0,
                 "overTurn": over_turn_count,
                 "noCommunication": no_communication_count,
-                "heavyImpact": heavy_impact_count,
+                "heavyImpactAlerts": heavy_impact_count,
                 "categories": categories
             },
             "connected": bool(user and user['gmail_email']),

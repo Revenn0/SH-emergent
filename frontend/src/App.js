@@ -434,11 +434,11 @@ function Dashboard({ user, onLogout }) {
 
           <div className="bg-white rounded-lg border border-red-200 p-4">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-gray-600">Super Important</p>
+              <p className="text-xs text-gray-600">Heavy Impact</p>
               <AlertTriangle className="w-4 h-4 text-red-600" />
             </div>
             <p className="text-2xl font-semibold text-red-700">
-              {stats.superImportant || 0}
+              {stats.heavyImpact || 0}
             </p>
             <p className="text-xs text-gray-500 mt-1">Light Sensor + Over-turn</p>
           </div>
