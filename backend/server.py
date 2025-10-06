@@ -322,153 +322,109 @@ background_task = None
 @app.on_event("startup")
 async def startup_db():
     global db_pool, background_task
-    
-    logger.info("=" * 60)
-    logger.info("DATABASE INITIALIZATION STARTING")
-    logger.info("=" * 60)
-    
     database_url = os.environ.get('DATABASE_URL')
     if not database_url:
-        logger.error("FATAL: DATABASE_URL environment variable not set")
         raise RuntimeError("DATABASE_URL environment variable not set")
     
-    logger.info("Connecting to database...")
-    
-    try:
-        db_pool = await asyncpg.create_pool(database_url, min_size=2, max_size=10)
-        logger.info("✓ Database pool created successfully")
-    except Exception as e:
-        logger.error(f"✗ Failed to create database pool: {str(e)}")
-        raise
+    db_pool = await asyncpg.create_pool(database_url, min_size=2, max_size=10)
+    logger.info("Database pool created")
     
     async with db_pool.acquire() as conn:
-        try:
-            logger.info("Creating table: users")
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id VARCHAR PRIMARY KEY,
+                username VARCHAR UNIQUE NOT NULL,
+                email VARCHAR UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                full_name VARCHAR,
+                gmail_email VARCHAR,
+                gmail_app_password VARCHAR,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tracker_alerts (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR NOT NULL,
+                email_id VARCHAR NOT NULL,
+                alert_type VARCHAR,
+                alert_time VARCHAR,
+                location VARCHAR,
+                latitude VARCHAR,
+                longitude VARCHAR,
+                device_serial VARCHAR,
+                tracker_name VARCHAR,
+                account_name VARCHAR,
+                raw_body TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                status VARCHAR DEFAULT 'New',
+                acknowledged BOOLEAN DEFAULT FALSE,
+                acknowledged_at TIMESTAMP,
+                acknowledged_by VARCHAR,
+                notes TEXT,
+                assigned_to VARCHAR,
+                favorite BOOLEAN DEFAULT FALSE,
+                UNIQUE(user_id, email_id)
+            )
+            """
+        )
+        
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS sync_checkpoints (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR NOT NULL UNIQUE,
+                last_email_id VARCHAR,
+                last_sync_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS email_sync_runs (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR NOT NULL,
+                started_at TIMESTAMP NOT NULL,
+                completed_at TIMESTAMP NOT NULL,
+                source VARCHAR NOT NULL,
+                status VARCHAR NOT NULL,
+                emails_read INTEGER DEFAULT 0,
+                emails_new INTEGER DEFAULT 0,
+                error_summary TEXT,
+                log_json TEXT
+            )
+            """
+        )
+        
+        admin_exists = await conn.fetchval(
+            "SELECT COUNT(*) FROM users WHERE username = 'admin'"
+        )
+        
+        if admin_exists == 0:
+            import uuid
+            admin_id = str(uuid.uuid4())
+            admin_password_hash = pwd_context.hash("dimension")
             await conn.execute(
                 """
-                CREATE TABLE IF NOT EXISTS users (
-                    id VARCHAR PRIMARY KEY,
-                    username VARCHAR UNIQUE NOT NULL,
-                    email VARCHAR UNIQUE NOT NULL,
-                    password_hash TEXT NOT NULL,
-                    full_name VARCHAR,
-                    gmail_email VARCHAR,
-                    gmail_app_password VARCHAR,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-                """
+                INSERT INTO users (id, username, email, password_hash, full_name)
+                VALUES ($1, $2, $3, $4, $5)
+                ON CONFLICT (username) DO UPDATE 
+                SET password_hash = EXCLUDED.password_hash
+                """,
+                admin_id, "admin", "admin@tracker.com", admin_password_hash, "Administrator"
             )
-            logger.info("✓ Table 'users' ready")
-        except Exception as e:
-            logger.error(f"✗ Failed to create 'users' table: {str(e)}")
-            raise
-        
-        try:
-            logger.info("Creating table: tracker_alerts")
-            await conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS tracker_alerts (
-                    id SERIAL PRIMARY KEY,
-                    user_id VARCHAR NOT NULL,
-                    email_id VARCHAR NOT NULL,
-                    alert_type VARCHAR,
-                    alert_time VARCHAR,
-                    location VARCHAR,
-                    latitude VARCHAR,
-                    longitude VARCHAR,
-                    device_serial VARCHAR,
-                    tracker_name VARCHAR,
-                    account_name VARCHAR,
-                    raw_body TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    status VARCHAR DEFAULT 'New',
-                    acknowledged BOOLEAN DEFAULT FALSE,
-                    acknowledged_at TIMESTAMP,
-                    acknowledged_by VARCHAR,
-                    notes TEXT,
-                    assigned_to VARCHAR,
-                    favorite BOOLEAN DEFAULT FALSE,
-                    UNIQUE(user_id, email_id)
-                )
-                """
-            )
-            logger.info("✓ Table 'tracker_alerts' ready")
-        except Exception as e:
-            logger.error(f"✗ Failed to create 'tracker_alerts' table: {str(e)}")
-            raise
-        
-        try:
-            logger.info("Creating table: sync_checkpoints")
-            await conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS sync_checkpoints (
-                    id SERIAL PRIMARY KEY,
-                    user_id VARCHAR NOT NULL UNIQUE,
-                    last_email_id VARCHAR,
-                    last_sync_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            logger.info("✓ Table 'sync_checkpoints' ready")
-        except Exception as e:
-            logger.error(f"✗ Failed to create 'sync_checkpoints' table: {str(e)}")
-            raise
-        
-        try:
-            logger.info("Creating table: email_sync_runs")
-            await conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS email_sync_runs (
-                    id SERIAL PRIMARY KEY,
-                    user_id VARCHAR NOT NULL,
-                    started_at TIMESTAMP NOT NULL,
-                    completed_at TIMESTAMP NOT NULL,
-                    source VARCHAR NOT NULL,
-                    status VARCHAR NOT NULL,
-                    emails_read INTEGER DEFAULT 0,
-                    emails_new INTEGER DEFAULT 0,
-                    error_summary TEXT,
-                    log_json TEXT
-                )
-                """
-            )
-            logger.info("✓ Table 'email_sync_runs' ready")
-        except Exception as e:
-            logger.error(f"✗ Failed to create 'email_sync_runs' table: {str(e)}")
-            raise
-        
-        try:
-            logger.info("Checking for admin user...")
-            admin_exists = await conn.fetchval(
-                "SELECT COUNT(*) FROM users WHERE username = 'admin'"
-            )
-            
-            if admin_exists == 0:
-                import uuid
-                admin_id = str(uuid.uuid4())
-                admin_password_hash = pwd_context.hash("dimension")
-                await conn.execute(
-                    """
-                    INSERT INTO users (id, username, email, password_hash, full_name)
-                    VALUES ($1, $2, $3, $4, $5)
-                    ON CONFLICT (username) DO NOTHING
-                    """,
-                    admin_id, "admin", "admin@tracker.com", admin_password_hash, "Administrator"
-                )
-                logger.info("✓ Default admin user created (username: admin, password: dimension)")
-            else:
-                logger.info("✓ Admin user already exists")
-        except Exception as e:
-            logger.error(f"✗ Failed to create/check admin user: {str(e)}")
-            raise
-    
-    logger.info("=" * 60)
-    logger.info("DATABASE INITIALIZATION COMPLETED SUCCESSFULLY")
-    logger.info("=" * 60)
+            logger.info("Default admin user created (username: admin, password: dimension)")
+        else:
+            logger.info("Admin user already exists")
     
     background_task = asyncio.create_task(auto_sync_background())
-    logger.info("✓ Background sync task started (10 minute interval)")
+    logger.info("Background sync task started (10 minute interval)")
 
 async def auto_sync_background():
     """Background task to automatically sync alerts every 10 minutes for all users"""
