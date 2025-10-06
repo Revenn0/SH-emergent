@@ -706,18 +706,6 @@ async def list_alerts(category: Optional[str] = Query(None)):
         }
 
 
-@api_router.delete("/alerts/{alert_id}")
-async def delete_alert(alert_id: int):
-    """Delete an alert (only from app, not from Gmail)"""
-    async with db_pool.acquire() as conn:
-        await conn.execute(
-            "DELETE FROM tracker_alerts WHERE id = $1 AND user_id = $2",
-            alert_id, DEFAULT_USER_ID
-        )
-    
-    return {"success": True}
-
-
 @api_router.delete("/alerts/clear-all/history")
 async def clear_all_alerts():
     """Clear all alerts and sync checkpoint (reset system)"""
@@ -732,6 +720,18 @@ async def clear_all_alerts():
         )
     
     return {"success": True, "message": "All alerts and sync history cleared"}
+
+
+@api_router.delete("/alerts/{alert_id}")
+async def delete_alert(alert_id: int):
+    """Delete an alert (only from app, not from Gmail)"""
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM tracker_alerts WHERE id = $1 AND user_id = $2",
+            alert_id, DEFAULT_USER_ID
+        )
+    
+    return {"success": True}
 
 
 @api_router.post("/alerts/{alert_id}/acknowledge")

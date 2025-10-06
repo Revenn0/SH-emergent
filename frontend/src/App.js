@@ -135,6 +135,7 @@ function Dashboard({ user, onLogout }) {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState("priority");
 
   useEffect(() => {
     loadAlerts();
@@ -165,6 +166,12 @@ function Dashboard({ user, onLogout }) {
       if (interval) clearInterval(interval);
     };
   }, [autoRefresh, gmailConnected, selectedCategory]);
+
+  useEffect(() => {
+    if (alerts.length > 0) {
+      groupAlertsByDevice(alerts);
+    }
+  }, [sortBy]);
 
   const loadCategories = async () => {
     try {
@@ -231,13 +238,36 @@ function Dashboard({ user, onLogout }) {
       }
     });
 
-    setGroupedAlerts(Object.values(grouped).sort((a, b) => {
-      if (a.severity === "heavy-impact" && b.severity !== "heavy-impact") return -1;
-      if (b.severity === "heavy-impact" && a.severity !== "heavy-impact") return 1;
-      if (a.severity === "high" && b.severity === "normal") return -1;
-      if (b.severity === "high" && a.severity === "normal") return 1;
-      return b.count - a.count;
-    }));
+    const groupedArray = Object.values(grouped);
+    
+    // Apply sorting based on sortBy
+    const sorted = groupedArray.sort((a, b) => {
+      switch(sortBy) {
+        case "priority":
+          if (a.severity === "heavy-impact" && b.severity !== "heavy-impact") return -1;
+          if (b.severity === "heavy-impact" && a.severity !== "heavy-impact") return 1;
+          if (a.severity === "high" && b.severity === "normal") return -1;
+          if (b.severity === "high" && a.severity === "normal") return 1;
+          return b.count - a.count;
+        
+        case "newest":
+          return new Date(b.latestAlert.alert_time) - new Date(a.latestAlert.alert_time);
+        
+        case "oldest":
+          return new Date(a.latestAlert.alert_time) - new Date(b.latestAlert.alert_time);
+        
+        case "device":
+          return a.device.localeCompare(b.device);
+        
+        case "alerts":
+          return b.count - a.count;
+        
+        default:
+          return 0;
+      }
+    });
+
+    setGroupedAlerts(sorted);
   };
 
   const handleSync = async () => {
@@ -548,7 +578,21 @@ function Dashboard({ user, onLogout }) {
                   )}
                 </div>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <label className="text-xs font-medium text-gray-600">Sort by:</label>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
+                  >
+                    <option value="priority">Priority</option>
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                    <option value="device">Device Name (A-Z)</option>
+                    <option value="alerts">Alert Count</option>
+                  </select>
+                </div>
                 <label className="flex items-center space-x-2 text-xs text-gray-600">
                   <input
                     type="checkbox"
