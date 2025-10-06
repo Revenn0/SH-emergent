@@ -34,8 +34,16 @@ The system employs a client-server architecture with a Python FastAPI backend an
 - **Alert Details Modal**: Provides comprehensive alert information, including location with Google Maps link, coordinates, device serial number, and all alerts for that specific motorcycle.
 - **Email Filtering**: Only processes emails from `alerts-no-reply@tracking-update.com` using IMAP search filters and includes automatic deduplication.
 - **Email Parsing**: Extracts `Alert Type`, `Time`, `Location`, `Coordinates`, `Device Serial Number`, `Tracker Name`, and `Account Name` using regex patterns.
+- **Email Reading with Logging** (Admin-only):
+    - **Refresh Alerts** button: Reloads alerts from database only (no email reading)
+    - **Read Emails** button (Admin Dashboard): Manual email reading with comprehensive logging
+    - Real-time log display showing: connection status, emails found, processing progress, errors
+    - Detailed statistics: emails_read, emails_new, duration_ms
+    - Complete execution history stored in `email_sync_runs` table
+    - Structured logging at each step with timestamps
 - **Alert Management**: Allows viewing, sorting, filtering, and deleting alerts (within the app only), along with features for acknowledging, updating status, adding notes, assigning, and favoriting alerts.
-- **Automatic Background Synchronization**: A background task runs every 10 minutes to fetch new emails incrementally (up to 100 emails per sync) and update the system.
+- **Automatic Background Synchronization**: A background task runs every 10 minutes to fetch new emails incrementally (up to 100 emails per sync) and update the system. All sync runs are logged with full execution history.
+- **Pagination System**: SQL-based pagination with LIMIT/OFFSET for efficient data loading (default 50 items/page, max 200). Includes aggregate queries for statistics without loading full dataset.
 
 ### Feature Specifications
 - **Alert Categories**: 14 predefined alert types including Heavy Impact, Light Sensor, Out Of Country, No Communication, Over-turn, Low Battery, Motion, New Positions, High Risk Area, Custom GeoFence, Rotation Stop, Temperature, Pressure, and Humidity.
@@ -48,6 +56,7 @@ The system employs a client-server architecture with a Python FastAPI backend an
     - `users` table: Stores user authentication and Gmail configuration (`id`, `username`, `password_hash`, `email`, `full_name`, `gmail_email`, `gmail_app_password`, `created_at`, `updated_at`).
     - `tracker_alerts` table: Stores parsed alert data (`id`, `user_id`, `email_id`, `alert_type`, `alert_time`, `location`, `latitude`, `longitude`, `device_serial`, `tracker_name`, `account_name`, `raw_body`, `created_at`, `status`, `acknowledged`, `acknowledged_at`, `acknowledged_by`, `notes`, `assigned_to`, `favorite`).
     - `sync_checkpoints` table: For incremental email synchronization (per-user tracking).
+    - `email_sync_runs` table: Stores complete execution history of email synchronization runs (`id`, `user_id`, `started_at`, `completed_at`, `source`, `status`, `emails_read`, `emails_new`, `error_summary`, `log_json`).
 - **Deployment**: Configured for VM (always-on) deployment due to persistent state, continuous uptime requirement for alert monitoring, and background synchronization.
 
 ## External Dependencies
