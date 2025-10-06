@@ -94,12 +94,6 @@ function LoginPage({ onLogin }) {
             >
               {loading ? "Signing in..." : "Sign in"}
             </button>
-
-            <div className="mt-6 pt-6 border-t border-gray-200 text-center">
-              <p className="text-xs text-gray-500 mb-1">Demo Credentials:</p>
-              <p className="text-xs text-gray-600">Username: admin</p>
-              <p className="text-xs text-gray-600">Password: admin</p>
-            </div>
           </form>
         </div>
       </div>
