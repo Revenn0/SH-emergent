@@ -70,13 +70,16 @@ ALERT_CATEGORIES = [
 
 class RegisterRequest(BaseModel):
     username: str
-    email: EmailStr
     password: str
-    full_name: Optional[str] = None
 
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+class AdminCreateUserRequest(BaseModel):
+    username: str
+    password: str
+    is_admin: bool = False
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -142,7 +145,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
-            "SELECT id, username, email, full_name, created_at FROM users WHERE id = $1",
+            "SELECT id, username, is_admin, created_at FROM admin_credentials WHERE id = $1",
             user_id
         )
         
@@ -251,6 +254,18 @@ async def startup_db():
     async with db_pool.acquire() as conn:
         await conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS admin_credentials (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                is_admin BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        
+        await conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS users (
                 id VARCHAR PRIMARY KEY,
                 username VARCHAR UNIQUE NOT NULL,
@@ -305,21 +320,19 @@ async def startup_db():
         )
         
         admin_exists = await conn.fetchval(
-            "SELECT COUNT(*) FROM users WHERE username = 'admin'"
+            "SELECT COUNT(*) FROM admin_credentials WHERE username = 'admin'"
         )
         
         if admin_exists == 0:
-            import uuid
-            admin_id = str(uuid.uuid4())
             admin_password_hash = pwd_context.hash("dimension")
             await conn.execute(
                 """
-                INSERT INTO users (id, username, email, password_hash, full_name)
-                VALUES ($1, $2, $3, $4, $5)
+                INSERT INTO admin_credentials (username, password_hash, is_admin)
+                VALUES ($1, $2, TRUE)
                 ON CONFLICT (username) DO UPDATE 
-                SET password_hash = EXCLUDED.password_hash
+                SET password_hash = EXCLUDED.password_hash, is_admin = TRUE
                 """,
-                admin_id, "admin", "admin@tracker.com", admin_password_hash, "Administrator"
+                "admin", admin_password_hash
             )
             logger.info("Default admin user created (username: admin, password: dimension)")
         else:
@@ -429,32 +442,31 @@ async def shutdown_db():
 @api_router.post("/auth/register")
 async def register(request: RegisterRequest):
     """Register a new user"""
-    logger.info(f"Registration attempt: username={request.username}, email={request.email}")
+    logger.info(f"Registration attempt: username={request.username}")
     
     async with db_pool.acquire() as conn:
-        existing = await conn.fetchrow(
-            "SELECT id FROM users WHERE username = $1 OR email = $2",
-            request.username, request.email
+        existing = await conn.fetchval(
+            "SELECT id FROM admin_credentials WHERE username = $1",
+            request.username
         )
         
         if existing:
-            logger.warning(f"Registration failed: Username or email already exists - {request.username}/{request.email}")
-            raise HTTPException(status_code=400, detail="Username or email already exists")
+            logger.warning(f"Registration failed: Username already exists - {request.username}")
+            raise HTTPException(status_code=400, detail="Username already exists")
         
-        import uuid
-        user_id = str(uuid.uuid4())
         password_hash = pwd_context.hash(request.password)
         
-        await conn.execute(
+        user_id = await conn.fetchval(
             """
-            INSERT INTO users (id, username, email, password_hash, full_name)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO admin_credentials (username, password_hash, is_admin)
+            VALUES ($1, $2, FALSE)
+            RETURNING id
             """,
-            user_id, request.username, request.email, password_hash, request.full_name
+            request.username, password_hash
         )
         
-        access_token = create_access_token({"sub": user_id})
-        refresh_token = create_refresh_token({"sub": user_id})
+        access_token = create_access_token({"sub": str(user_id)})
+        refresh_token = create_refresh_token({"sub": str(user_id)})
         
         logger.info(f"New user registered: {request.username}")
         
@@ -464,8 +476,7 @@ async def register(request: RegisterRequest):
             user={
                 "id": user_id,
                 "username": request.username,
-                "email": request.email,
-                "full_name": request.full_name
+                "is_admin": False
             }
         )
 
@@ -475,7 +486,7 @@ async def login(request: LoginRequest):
     """Login with JWT authentication"""
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
-            "SELECT id, username, email, password_hash, full_name FROM users WHERE username = $1",
+            "SELECT id, username, password_hash, is_admin FROM admin_credentials WHERE username = $1",
             request.username
         )
         
@@ -487,8 +498,8 @@ async def login(request: LoginRequest):
             logger.warning(f"Invalid password for user: {request.username}")
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
-        access_token = create_access_token({"sub": user['id']})
-        refresh_token = create_refresh_token({"sub": user['id']})
+        access_token = create_access_token({"sub": str(user['id'])})
+        refresh_token = create_refresh_token({"sub": str(user['id'])})
         
         logger.info(f"User logged in: {request.username}")
         
@@ -498,8 +509,7 @@ async def login(request: LoginRequest):
             user={
                 "id": user['id'],
                 "username": user['username'],
-                "email": user['email'],
-                "full_name": user['full_name']
+                "is_admin": user['is_admin']
             }
         )
 
@@ -515,7 +525,7 @@ async def refresh_token_endpoint(request: RefreshTokenRequest):
     
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
-            "SELECT id, username, email, full_name FROM users WHERE id = $1",
+            "SELECT id, username, is_admin FROM admin_credentials WHERE id = $1",
             user_id
         )
         
@@ -531,8 +541,7 @@ async def refresh_token_endpoint(request: RefreshTokenRequest):
         user={
             "id": user['id'],
             "username": user['username'],
-            "email": user['email'],
-            "full_name": user['full_name']
+            "is_admin": user['is_admin']
         }
     )
 
@@ -541,6 +550,83 @@ async def refresh_token_endpoint(request: RefreshTokenRequest):
 async def get_me(current_user: dict = Depends(get_current_user)):
     """Get current authenticated user"""
     return current_user
+
+
+@api_router.post("/admin/create-user")
+async def admin_create_user(request: AdminCreateUserRequest, current_user: dict = Depends(get_current_user)):
+    """Admin endpoint to create new users"""
+    if not current_user.get('is_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    async with db_pool.acquire() as conn:
+        existing = await conn.fetchval(
+            "SELECT id FROM admin_credentials WHERE username = $1",
+            request.username
+        )
+        
+        if existing:
+            raise HTTPException(status_code=400, detail="Username already exists")
+        
+        password_hash = pwd_context.hash(request.password)
+        
+        user_id = await conn.fetchval(
+            """
+            INSERT INTO admin_credentials (username, password_hash, is_admin)
+            VALUES ($1, $2, $3)
+            RETURNING id
+            """,
+            request.username, password_hash, request.is_admin
+        )
+        
+        logger.info(f"Admin {current_user['username']} created new user: {request.username}")
+        
+        return {
+            "success": True,
+            "user": {
+                "id": user_id,
+                "username": request.username,
+                "is_admin": request.is_admin
+            }
+        }
+
+
+@api_router.get("/admin/users")
+async def admin_list_users(current_user: dict = Depends(get_current_user)):
+    """Admin endpoint to list all users"""
+    if not current_user.get('is_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    async with db_pool.acquire() as conn:
+        users = await conn.fetch(
+            "SELECT id, username, is_admin, created_at FROM admin_credentials ORDER BY created_at DESC"
+        )
+        
+        return {
+            "users": [dict(u) for u in users]
+        }
+
+
+@api_router.delete("/admin/users/{user_id}")
+async def admin_delete_user(user_id: int, current_user: dict = Depends(get_current_user)):
+    """Admin endpoint to delete a user"""
+    if not current_user.get('is_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if user_id == current_user['id']:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    
+    async with db_pool.acquire() as conn:
+        deleted = await conn.fetchval(
+            "DELETE FROM admin_credentials WHERE id = $1 RETURNING id",
+            user_id
+        )
+        
+        if not deleted:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        logger.info(f"Admin {current_user['username']} deleted user ID: {user_id}")
+        
+        return {"success": True}
 
 
 def connect_imap(email_addr: str, app_password: str):
@@ -797,11 +883,6 @@ async def list_alerts(
 ):
     """Get tracker alerts with pagination and optional category filter"""
     async with db_pool.acquire() as conn:
-        user = await conn.fetchrow(
-            "SELECT * FROM users WHERE id = $1",
-            current_user['id']
-        )
-        
         offset = (page - 1) * limit
         where_clause = "WHERE user_id = $1"
         params = [current_user['id']]
