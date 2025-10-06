@@ -1,403 +1,53 @@
 # Motorcycle Tracker Alert Management System
 
-## Project Overview
-
-This is a **Motorcycle Tracker Alert Management System** that reads tracker alerts exclusively from `alerts-no-reply@tracking-update.com` via Gmail IMAP, categorizes them using AI, and displays them in a modern dashboard with sidebar navigation.
-
-The system parses tracker emails to extract essential information like alert type, location, coordinates, device info, and displays only the most important data in an organized interface.
-
-### Tech Stack
-- **Backend**: Python FastAPI with PostgreSQL
-- **Frontend**: React with Tailwind CSS and Lucide icons
-- **Authentication**: Simple login (username: admin, password: admin)
-- **Email**: Gmail IMAP integration (filters only tracker alerts)
-- **AI**: Google Gemini for categorization (optional enhancement)
-
-## Features
-
-### 1. Login System
-- Clean, minimal design matching provided screenshot
-- Simple username/password authentication
-- Credentials displayed on login page: `admin` / `admin`
-- Bike icon for branding
-
-### 2. Dashboard with Sidebar
-- Collapsible sidebar navigation
-- Three main pages:
-  - **Bike Tracker**: View all alerts grouped by motorcycle
-  - **Admin Dashboard**: System health and sync settings
-  - **Service Tracker**: Gmail configuration
-
-### 3. Alert Grouping & Priority System
-- **Alerts grouped by motorcycle** (tracker_name)
-- **Badge system**: Shows 1, 2, 3, or 3+ alerts per bike
-- **Super Important Category**: Motorcycles with 2+ different alerts
-- **Color-coded severity**:
-  - Red: Super Important (2+ alerts)
-  - Orange: High Priority (critical alert types)
-  - Blue: Normal priority
-
-### 4. Status Cards Dashboard
-Shows real-time system status:
-- **Total Alerts**: All filtered alerts
-- **Unread**: Alerts requiring attention
-- **High Priority**: Bikes with multiple alerts
-- **Acknowledged**: Read alerts
-
-### 5. Admin Dashboard
-System health monitoring:
-- **System Status**: Application health
-- **Database**: PostgreSQL connection status
-- **Gmail Integration**: Email sync status
-- **Activity Summary**: 24h statistics
-
-### 6. Alert Details Modal
-Click any alert to view:
-- Full alert information
-- Location with Google Maps link
-- Coordinates (latitude/longitude)
-- Device serial number
-- Account information
-- All alerts for that motorcycle
-
-### 7. Email Filtering
-- **Only reads emails from**: `alerts-no-reply@tracking-update.com`
-- Uses IMAP search filter for efficiency
-- Automatic deduplication (won't read same email twice)
-
-### 8. Tracker Alert Categories
-The system categorizes alerts into 14 types:
-- Heavy Impact
-- Light Sensor
-- Out Of Country
-- No Communication after 2 days
-- Over-turn
-- Low Battery
-- Motion
-- New Positions
-- High Risk Area
-- Custom GeoFence
-- Rotation Stop
-- Temperature
-- Pressure
-- Humidity
-
-### 9. Email Parsing
-Extracts important information from tracker emails:
-- **Alert Type**: Type of alert triggered
-- **Time**: When the alert occurred
-- **Location**: Full address
-- **Coordinates**: Latitude and Longitude
-- **Device Serial Number**: Tracker device ID
-- **Tracker Name**: Vehicle/motorcycle identifier (plate)
-- **Account Name**: Owner account
-
-### 10. Alert Management
-- View alerts in professional table format
-- Delete alerts from app (doesn't delete from Gmail)
-- Click to view detailed modal popup
-- Sort and filter capabilities
-
-## Architecture
-
-### Backend (Port 8080)
-- FastAPI REST API
-- PostgreSQL database with two tables:
-  - `users`: User and Gmail configuration
-  - `tracker_alerts`: Parsed alert data
-- Email parser using regex patterns
-- Alert categorization engine
-- IMAP client for Gmail
-- Grouping logic for motorcycle alerts
-
-### Frontend (Port 5000)
-- React single-page application
-- Responsive design with Tailwind CSS
-- Lucide React icons
-- Three main views: Bike Tracker, Admin Dashboard, Settings
-- Local storage for session management
-- Modal popup for detailed alert view
-- Alert grouping by motorcycle
-
-## Database Schema
-
-### `users` table
-- id (primary key)
-- email, name, picture
-- gmail_email, gmail_app_password
-
-### `tracker_alerts` table
-- id (serial, primary key)
-- user_id, email_id (unique combination)
-- alert_type, alert_time, location
-- latitude, longitude
-- device_serial, tracker_name, account_name
-- raw_body, created_at
-
-## Setup Instructions
-
-### 1. Environment Variables
-The Gemini API key is configured in `backend/.env`:
-```
-GEMINI_API_KEY=AIzaSyDWpJiSr3Y8J4b-R6IlKeRyuK3FJNHB280
-```
-
-### 2. Database
-✅ PostgreSQL is automatically configured via `DATABASE_URL` environment variable
-
-### 3. Start the Application
-Both workflows start automatically:
-- **Backend**: Python FastAPI on port 8080
-- **Frontend**: React dev server on port 5000
-
-### 4. Login
-1. Open the web preview
-2. Login with:
-   - Username: `admin`
-   - Password: `admin`
-
-### 5. Connect Gmail
-1. Navigate to **Service Tracker** (Settings) page
-2. Generate a Gmail App Password:
-   - Go to myaccount.google.com/security
-   - Enable 2-factor authentication
-   - Search for "App passwords"
-   - Generate password for "Mail"
-3. Enter Gmail address and app password
-4. Click "Connect Gmail"
-
-### 6. Sync Alerts
-1. Go to **Bike Tracker** (Dashboard)
-2. Click "Refresh Alerts"
-3. Alerts will be fetched, grouped, and displayed
-
-### 7. View Alert Details
-1. Click on any row in the alerts table
-2. Modal popup shows all details
-3. View location on Google Maps
-4. See all alerts for that motorcycle
-
-## Project Structure
-
-```
-├── backend/
-│   ├── server.py          # FastAPI application
-│   ├── .env               # Environment variables
-│   └── requirements.txt   # Python dependencies
-├── frontend/
-│   ├── src/
-│   │   └── App.js        # Main React application
-│   ├── package.json      # Node dependencies
-│   └── public/
-│       └── index.html    # HTML template
-└── replit.md             # This file
-```
-
-## API Endpoints
-
-### Authentication
-- `POST /api/auth/login` - Login with username/password
-
-### Gmail
-- `POST /api/gmail/connect` - Connect Gmail account
-- `DELETE /api/gmail/disconnect` - Disconnect Gmail
-
-### Alerts
-- `GET /api/alerts/list` - Get all alerts, stats, and grouping info (includes management fields)
-- `POST /api/alerts/sync` - Sync new alerts from Gmail with incremental checkpoint
-- `DELETE /api/alerts/{id}` - Delete alert from app
-- `POST /api/alerts/{id}/acknowledge` - Acknowledge an alert
-- `POST /api/alerts/{id}/status` - Update alert status (New/In Progress/Resolved/Closed)
-- `POST /api/alerts/{id}/notes` - Add notes to an alert
-- `POST /api/alerts/{id}/assign` - Assign alert to team member
-- `POST /api/alerts/{id}/favorite` - Toggle favorite status
-
-## Email Parser
-
-The system uses regex patterns to extract data from tracker emails:
-
-Example tracker email format:
-```
-Dear user,
-Your device has detected the following event…
- - Alert type: Notify On Light Sensor
- - Time: 2025-10-03 12:05:55 (UTC)
- - Location: Runnymede Road, Surrey, Egham, England
- - Latitude, Longitude: 51.4355838, -0.540028
- - Device Serial Number: 867684070096659
- - Tracker Name: EY70TWF
- - Account name: 4th Dimension Innovation
-```
-
-The parser extracts each field and stores it in the database for easy viewing.
-
-## Priority & Grouping System
-
-### How it Works:
-1. Alerts are grouped by `tracker_name` (motorcycle plate)
-2. Badge shows number of alerts: 1, 2, 3, or 3+
-3. Motorcycles with 2+ different alerts = **Super Important**
-4. Table sorted by priority (Super Important first)
-5. Color coding:
-   - **Red**: Super Important (2+ alerts)
-   - **Orange**: High Priority (critical types)
-   - **Blue**: Normal
-
-### Super Important Logic:
-```javascript
-if (motorcycle has >= 2 different alerts) {
-  severity = "super-important"
-  badge = red
-  sort to top
-}
-```
-
-## UI/UX Design Principles
-
-Following best practices from screenshot references:
-- **Minimal color palette**: Gray scale with accent colors
-- **Clean typography**: System fonts, clear hierarchy
-- **Consistent spacing**: 4, 8, 16, 24px grid
-- **Professional table design**: Borders, hover states
-- **Status indicators**: Color-coded for quick scanning
-- **Responsive layout**: Works on all screen sizes
-
-## Automatic Background Synchronization
-
-The system now includes **automatic background synchronization** that runs every 10 minutes:
-
-- **Sync Interval**: 10 minutes (600 seconds)
-- **Email Limit**: Processes last 100 emails per sync
-- **Incremental Sync**: Uses checkpoint system to only fetch new emails
-- **Auto-Start**: Background task starts automatically on server startup
-- **Logging**: All sync activities are logged for monitoring
-
-The background sync:
-1. Checks for Gmail connection every 10 minutes
-2. Fetches new emails since last checkpoint
-3. Processes up to 100 emails (if no checkpoint exists)
-4. Updates checkpoint with last processed email
-5. Continues running silently in background
-
-You can also manually sync anytime using the "Refresh Alerts" button.
-
-## Deployment
-
-The app is configured for **VM deployment (always-on)** since it:
-- Maintains database connections
-- Requires persistent state
-- **Runs automatic background sync every 10 minutes**
-- Needs continuous uptime for alert monitoring
-
-To deploy:
-1. Ensure all environment variables are set (DATABASE_URL, GEMINI_API_KEY if using)
-2. Click "Publish" in Replit
-3. App will be deployed with both backend and frontend running
-4. Background sync will start automatically
-
-## Security Notes
-
-⚠️ **CRITICAL - For Production Deployment:**
-1. **Gmail app passwords are stored in PLAINTEXT** in database
-   - ⚠️ HIGH SECURITY RISK for production use
-   - Recommendation: Use encryption-at-rest or secrets manager
-   - Alternative: Consider using Gmail OAuth integration (available in Replit integrations)
-2. Login credentials are hardcoded (admin/admin)
-   - Must implement proper authentication system
-3. Change default admin credentials before production deployment
-4. CORS is configured for Replit domains only
-5. Consider implementing rate limiting for API endpoints
-
-**For Testing/Development**: Current setup is functional but not production-secure.
-
-## Troubleshooting
-
-### Backend Won't Start
-- Check DATABASE_URL is valid
-- Verify Python dependencies are installed
-- Check backend logs for errors
-
-### Frontend Can't Connect
-- Verify backend is running on port 8080
-- Check proxy configuration in package.json
-- Review browser console for errors
-
-### Email Sync Fails
-- Verify Gmail app password is correct
-- Ensure 2-factor auth is enabled on Gmail
-- Check that IMAP is enabled in Gmail settings
-- Confirm emails are from alerts-no-reply@tracking-update.com
-
-### No Alerts Showing
-- Click "Refresh Alerts" to fetch emails
-- Check that Gmail is connected in Settings
-- Verify emails exist from tracker sender
-- Review backend logs for sync errors
-
-### Modal Not Opening
-- Check browser console for JavaScript errors
-- Verify alert grouping is working correctly
-- Test with different browsers
-
-## Recent Changes
-
-- **2025-10-06**: Automatic Background Synchronization
-  - **Backend Enhancements**:
-    - Implemented automatic background sync task running every 10 minutes
-    - Changed default email limit from 50 to 100 emails per sync
-    - Background task starts automatically on server startup
-    - Incremental sync continues to use checkpoint system for efficiency
-    - All sync operations logged for monitoring and debugging
-  - **Frontend Updates**:
-    - Updated default sync interval display to 10 minutes
-    - Updated default email limit display to 100
-  - **Deployment**:
-    - Configured for VM (always-on) deployment
-    - Ready for 24-hour production testing
-  - **Security Notice**:
-    - Gmail credentials still stored in plaintext (see Security Notes)
-    - Recommended: Implement encryption before full production deployment
-
-- **2025-10-05**: Alert Lifecycle Management + Performance Optimizations
-  - **Backend Enhancements**:
-    - Added alert lifecycle management: status workflow (New → In Progress → Resolved → Closed)
-    - Created 5 new API endpoints: /acknowledge, /status, /notes, /assign, /favorite
-    - Implemented checkpoint-based incremental sync (saves last_email_id, only fetches new emails)
-    - Added GZip compression middleware for API responses (compresses responses >1KB)
-    - Extended tracker_alerts table with: status, acknowledged, acknowledged_at, acknowledged_by, notes, assigned_to, favorite
-    - Created sync_checkpoints table for incremental email sync
-    - Fixed critical bug: Refactored parallel email processing to use individual database connections per email (prevents asyncpg InterfaceError)
-  - **Frontend Enhancements**:
-    - Added dark mode toggle in header with localStorage persistence and sun/moon icons
-    - Implemented search by motorcycle plate/tracker name with live filtering
-    - Updated /alerts/list to return new management fields
-    - Added clear buttons for both category filter and search
-  - **Performance**: 
-    - Parallel email processing now works correctly (10 emails at a time)
-    - Incremental sync reduces redundant email fetching
-    - GZip compression reduces API response sizes by ~70%
-
-- **2025-10-05**: Complete UI/UX Redesign + Performance Improvements
-  - Redesigned login to match screenshot (minimal design with bike icon)
-  - Created status cards dashboard (System, Database, Gmail, Alerts)
-  - Implemented alert grouping by motorcycle (tracker_name)
-  - Added badge system (1, 2, 3, 3+ alerts per bike)
-  - Created "Super Important" category for bikes with 2+ alerts
-  - Built professional table layout matching screenshot design
-  - Implemented modal popup for detailed alert information
-  - Added Google Maps integration for locations
-  - Reorganized sidebar (Bike Tracker, Admin Dashboard, Service Tracker)
-  - Applied clean, minimal color scheme (gray scale + accents)
-  
-- **2025-10-05**: Performance & Features Enhancement
-  - **Parallel Email Processing**: Sync now processes 10 emails simultaneously using asyncio.gather (10x faster)
-  - **Category System**: Added 14 predefined alert categories with automatic classification
-  - **Dynamic Filters**: Dropdown filter to view alerts by category in real-time
-  - **Auto-Refresh**: Optional 30-second auto-refresh to keep dashboard updated
-  - **Optimized Queries**: Reduced database calls with batch queries and ON CONFLICT handling
-  - **Lightweight UI**: Instant category switching without page reload
-  - **Better UX**: Clear filter button, active filter indicator, category-specific counts
+## Overview
+This project is a **Motorcycle Tracker Alert Management System** designed to monitor and manage alerts from motorcycle trackers. It exclusively processes emails from `alerts-no-reply@tracking-update.com` via Gmail IMAP, categorizes these alerts using AI, and presents them in a modern, user-friendly dashboard. The system's core purpose is to parse tracker emails, extract critical information (alert type, location, coordinates, device info), and display it in an organized interface, prioritizing important data. The goal is to provide real-time insights into motorcycle statuses and potential issues, offering a robust solution for vehicle monitoring and alert management.
 
 ## User Preferences
-
 None specified yet.
+
+## System Architecture
+The system employs a client-server architecture with a Python FastAPI backend and a React frontend.
+
+### UI/UX Decisions
+- **Design**: Minimal, clean design with a grayscale color palette and accent colors.
+- **Typography**: Clean typography with clear hierarchy, using system fonts.
+- **Layout**: Collapsible sidebar navigation, professional table designs with hover states, and a responsive layout for all screen sizes.
+- **Branding**: Bike icon for branding on the login page.
+- **Status Indicators**: Color-coded indicators for quick scanning of alert severities.
+
+### Technical Implementations
+- **Login System**: Simple username/password authentication (`admin`/`admin`) for initial access.
+- **Dashboard**: Features status cards for system health, total alerts, unread, high priority, and acknowledged alerts.
+- **Alert Grouping**: Alerts are grouped by `tracker_name` (motorcycle) with a badge system indicating the number of alerts per bike.
+- **Priority System**:
+    - **Super Important**: Motorcycles with 2+ different alerts (Red).
+    - **High Priority**: Critical alert types (Orange).
+    - **Normal Priority**: Standard alerts (Blue).
+- **Alert Details Modal**: Provides comprehensive alert information, including location with Google Maps link, coordinates, device serial number, and all alerts for that specific motorcycle.
+- **Email Filtering**: Only processes emails from `alerts-no-reply@tracking-update.com` using IMAP search filters and includes automatic deduplication.
+- **Email Parsing**: Extracts `Alert Type`, `Time`, `Location`, `Coordinates`, `Device Serial Number`, `Tracker Name`, and `Account Name` using regex patterns.
+- **Alert Management**: Allows viewing, sorting, filtering, and deleting alerts (within the app only), along with features for acknowledging, updating status, adding notes, assigning, and favoriting alerts.
+- **Automatic Background Synchronization**: A background task runs every 10 minutes to fetch new emails incrementally (up to 100 emails per sync) and update the system.
+
+### Feature Specifications
+- **Alert Categories**: 14 predefined alert types including Heavy Impact, Light Sensor, Out Of Country, No Communication, Over-turn, Low Battery, Motion, New Positions, High Risk Area, Custom GeoFence, Rotation Stop, Temperature, Pressure, and Humidity.
+- **Alert Lifecycle Management**: Supports a workflow for alerts with statuses: New, In Progress, Resolved, Closed.
+
+### System Design Choices
+- **Backend (Port 8080)**: FastAPI with PostgreSQL, handling email parsing, alert categorization, IMAP client operations, and alert grouping logic.
+- **Frontend (Port 5000)**: React SPA with Tailwind CSS and Lucide React icons, providing a responsive user interface across "Bike Tracker", "Admin Dashboard", and "Service Tracker" views. Uses local storage for session management.
+- **Database Schema**:
+    - `users` table: Stores user and Gmail configuration (`id`, `email`, `name`, `picture`, `gmail_email`, `gmail_app_password`).
+    - `tracker_alerts` table: Stores parsed alert data (`id`, `user_id`, `email_id`, `alert_type`, `alert_time`, `location`, `latitude`, `longitude`, `device_serial`, `tracker_name`, `account_name`, `raw_body`, `created_at`, `status`, `acknowledged`, `acknowledged_at`, `acknowledged_by`, `notes`, `assigned_to`, `favorite`).
+    - `sync_checkpoints` table: For incremental email synchronization.
+- **Deployment**: Configured for VM (always-on) deployment due to persistent state, continuous uptime requirement for alert monitoring, and background synchronization.
+
+## External Dependencies
+- **Email Service**: Gmail IMAP (for `alerts-no-reply@tracking-update.com`)
+- **Database**: PostgreSQL
+- **AI**: Google Gemini (for alert categorization, optional)
+- **Mapping**: Google Maps (for displaying alert locations)
+- **Frontend Framework**: React
+- **Styling**: Tailwind CSS
+- **Icons**: Lucide React icons
