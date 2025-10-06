@@ -1,6 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Query, Depends, Header
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
@@ -1028,3 +1029,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve frontend static files in production
+frontend_build_path = Path(__file__).parent.parent / "frontend" / "build"
+if frontend_build_path.exists():
+    app.mount("/static", StaticFiles(directory=str(frontend_build_path / "static")), name="static")
+    
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        """Serve frontend for all non-API routes"""
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
+        
+        file_path = frontend_build_path / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        
+        # Serve index.html for SPA routes
+        return FileResponse(frontend_build_path / "index.html")
