@@ -1012,6 +1012,11 @@ async def list_alerts(
         
         total_pages = (total_count + limit - 1) // limit
         
+        gmail_config = await conn.fetchrow(
+            "SELECT gmail_email FROM users WHERE id = $1 LIMIT 1",
+            str(current_user['id'])
+        )
+        
         return {
             "alerts": alert_list,
             "stats": {
@@ -1033,8 +1038,8 @@ async def list_alerts(
                 "has_next": page < total_pages,
                 "has_prev": page > 1
             },
-            "connected": bool(user and user['gmail_email']),
-            "email": user['gmail_email'] if user else None,
+            "connected": bool(gmail_config and gmail_config['gmail_email']),
+            "email": gmail_config['gmail_email'] if gmail_config else None,
             "activeFilter": category or "All"
         }
 
