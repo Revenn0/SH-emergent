@@ -204,14 +204,6 @@ function Dashboard({ user, onLogout }) {
   const [syncInterval, setSyncInterval] = useState(10);
   const [emailLimit, setEmailLimit] = useState(100);
 
-  const [showReadEmailsModal, setShowReadEmailsModal] = useState(false);
-  const [readEmailLimit, setReadEmailLimit] = useState(100);
-  const [readingEmails, setReadingEmails] = useState(false);
-  const [readLogs, setReadLogs] = useState([]);
-  const [readStatus, setReadStatus] = useState(null);
-  const [readStats, setReadStats] = useState(null);
-  const [readErrors, setReadErrors] = useState([]);
-  const [lastSync, setLastSync] = useState(null);
 
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -234,7 +226,6 @@ function Dashboard({ user, onLogout }) {
   useEffect(() => {
     loadAlerts();
     loadCategories();
-    loadLastSync();
     const savedDarkMode = localStorage.getItem("darkMode") === "true";
     setDarkMode(savedDarkMode);
     if (savedDarkMode) {
@@ -286,16 +277,6 @@ function Dashboard({ user, onLogout }) {
     }
   };
 
-  const loadLastSync = async () => {
-    try {
-      const response = await api.get("/emails/sync-history?limit=1");
-      if (response.data.syncs && response.data.syncs.length > 0) {
-        setLastSync(response.data.syncs[0]);
-      }
-    } catch (error) {
-      console.error("Failed to load last sync:", error);
-    }
-  };
 
   const loadAlerts = async (category = null, pageNum = page) => {
     try {
@@ -402,50 +383,10 @@ function Dashboard({ user, onLogout }) {
     setSyncing(true);
     try {
       await loadAlerts(selectedCategory !== "All" ? selectedCategory : null, page);
-      await loadLastSync();
     } catch (error) {
       console.error("Failed to refresh alerts:", error);
     } finally {
       setSyncing(false);
-    }
-  };
-
-  const handleReadEmails = async () => {
-    setReadingEmails(true);
-    setReadStatus("running");
-    setReadLogs([]);
-    setReadStats(null);
-    setReadErrors([]);
-    
-    try {
-      const response = await api.post("/emails/read", { limit: readEmailLimit });
-      
-      setReadStatus(response.data.status);
-      setReadLogs(response.data.log_steps || []);
-      setReadStats({
-        emails_read: response.data.emails_read,
-        emails_new: response.data.emails_new,
-        duration: response.data.duration
-      });
-      setReadErrors(response.data.errors || []);
-      
-      await loadAlerts(selectedCategory !== "All" ? selectedCategory : null, page);
-      await loadLastSync();
-    } catch (error) {
-      setReadStatus("error");
-      setReadErrors([error.response?.data?.detail || "Failed to read emails"]);
-    } finally {
-      setReadingEmails(false);
-    }
-  };
-
-  const handleViewHistory = async () => {
-    try {
-      const response = await api.get("/emails/sync-history?limit=10");
-      console.log("Sync history:", response.data);
-      alert(`Last 10 syncs:\n${JSON.stringify(response.data.syncs, null, 2)}`);
-    } catch (error) {
-      console.error("Failed to load sync history:", error);
     }
   };
 
@@ -605,16 +546,6 @@ function Dashboard({ user, onLogout }) {
               <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
               <span>Refresh Alerts</span>
             </button>
-            {isAdmin && (
-              <button
-                onClick={() => setShowReadEmailsModal(true)}
-                disabled={!gmailConnected}
-                className="flex items-center space-x-2 px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-              >
-                <Mail className="w-4 h-4" />
-                <span>Read Emails</span>
-              </button>
-            )}
           </div>
         </div>
       </header>
@@ -650,43 +581,6 @@ function Dashboard({ user, onLogout }) {
 
     return (
       <div className="p-6 space-y-6">
-        {lastSync && (
-          <div className="bg-white rounded-lg border border-blue-200 p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className={`p-2 rounded-lg ${
-                  lastSync.status === 'success' ? 'bg-green-100' : 'bg-red-100'
-                }`}>
-                  <Mail className={`w-5 h-5 ${
-                    lastSync.status === 'success' ? 'text-green-600' : 'text-red-600'
-                  }`} />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">Last Email Sync</p>
-                  <p className="text-xs text-gray-500">{getTimeAgo(lastSync.sync_time)}</p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-4">
-                <div className="text-right">
-                  <p className="text-xs text-gray-600">Emails Read</p>
-                  <p className="text-lg font-bold text-gray-900">{lastSync.emails_read || 0}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-gray-600">New Alerts</p>
-                  <p className="text-lg font-bold text-green-700">{lastSync.emails_new || 0}</p>
-                </div>
-                <div className={`px-3 py-1 rounded-md text-xs font-medium ${
-                  lastSync.status === 'success' 
-                    ? 'bg-green-100 text-green-700' 
-                    : 'bg-red-100 text-red-700'
-                }`}>
-                  {lastSync.status}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex items-center justify-between mb-2">
@@ -1232,164 +1126,6 @@ function Dashboard({ user, onLogout }) {
     </div>
   );
 
-  const ReadEmailsModal = () => {
-    if (!showReadEmailsModal) return null;
-
-    const formatDuration = (seconds) => {
-      if (!seconds) return "0s";
-      if (seconds < 60) return `${seconds.toFixed(1)}s`;
-      const mins = Math.floor(seconds / 60);
-      const secs = (seconds % 60).toFixed(0);
-      return `${mins}m ${secs}s`;
-    };
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => !readingEmails && setShowReadEmailsModal(false)}>
-        <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">Read Emails from Gmail</h2>
-                <p className="text-sm text-gray-500 mt-1">Fetch and process emails from connected Gmail account</p>
-              </div>
-              <button 
-                onClick={() => setShowReadEmailsModal(false)} 
-                disabled={readingEmails}
-                className="p-2 hover:bg-gray-100 rounded-lg transition disabled:opacity-50"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          <div className="p-6 space-y-6">
-            {!readingEmails && !readStatus && (
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Number of emails to read
-                  </label>
-                  <input
-                    type="number"
-                    value={readEmailLimit}
-                    onChange={(e) => setReadEmailLimit(parseInt(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none text-sm"
-                    min="1"
-                    max="500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Maximum: 500 emails per read</p>
-                </div>
-                <button
-                  onClick={handleReadEmails}
-                  className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition text-sm font-medium"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Start Reading</span>
-                </button>
-              </div>
-            )}
-
-            {readingEmails && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-center space-x-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
-                  <span className="text-sm font-medium text-blue-900">Reading emails...</span>
-                </div>
-              </div>
-            )}
-
-            {readStatus && (
-              <div className="space-y-4">
-                <div className={`p-4 rounded-lg border ${
-                  readStatus === 'success' ? 'bg-green-50 border-green-200' :
-                  readStatus === 'error' ? 'bg-red-50 border-red-200' :
-                  'bg-blue-50 border-blue-200'
-                }`}>
-                  <div className="flex items-center space-x-2">
-                    {readStatus === 'success' && <CheckCircle className="w-5 h-5 text-green-600" />}
-                    {readStatus === 'error' && <XCircle className="w-5 h-5 text-red-600" />}
-                    {readStatus === 'running' && <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />}
-                    <span className={`text-sm font-medium ${
-                      readStatus === 'success' ? 'text-green-900' :
-                      readStatus === 'error' ? 'text-red-900' :
-                      'text-blue-900'
-                    }`}>
-                      Status: {readStatus.charAt(0).toUpperCase() + readStatus.slice(1)}
-                    </span>
-                  </div>
-                </div>
-
-                {readStats && (
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                      <p className="text-xs text-gray-600 mb-1">Emails Read</p>
-                      <p className="text-2xl font-bold text-gray-900">{readStats.emails_read}</p>
-                    </div>
-                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                      <p className="text-xs text-gray-600 mb-1">New Emails</p>
-                      <p className="text-2xl font-bold text-green-700">{readStats.emails_new}</p>
-                    </div>
-                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                      <p className="text-xs text-gray-600 mb-1">Duration</p>
-                      <p className="text-2xl font-bold text-blue-700">{formatDuration(readStats.duration)}</p>
-                    </div>
-                  </div>
-                )}
-
-                {readLogs && readLogs.length > 0 && (
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-semibold text-gray-900">Logs</h3>
-                    <div className="bg-gray-900 text-gray-100 rounded-lg p-4 max-h-64 overflow-y-auto font-mono text-xs space-y-1">
-                      {readLogs.map((log, idx) => (
-                        <div key={idx} className="text-green-400">
-                          → {log}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {readErrors && readErrors.length > 0 && (
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-semibold text-red-900">Errors</h3>
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-2">
-                      {readErrors.map((error, idx) => (
-                        <div key={idx} className="text-sm text-red-800">
-                          • {error}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex space-x-3">
-                  <button
-                    onClick={() => {
-                      setShowReadEmailsModal(false);
-                      setReadStatus(null);
-                      setReadLogs([]);
-                      setReadStats(null);
-                      setReadErrors([]);
-                    }}
-                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition text-sm"
-                  >
-                    Close
-                  </button>
-                  <button
-                    onClick={handleViewHistory}
-                    className="flex-1 px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition text-sm"
-                  >
-                    View History
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   const AlertModal = () => {
     if (!showModal || !selectedAlert) return null;
 
@@ -1515,7 +1251,6 @@ function Dashboard({ user, onLogout }) {
         </main>
       </div>
       <AlertModal />
-      <ReadEmailsModal />
     </div>
   );
 }
