@@ -262,25 +262,53 @@ Following best practices from screenshot references:
 - **Status indicators**: Color-coded for quick scanning
 - **Responsive layout**: Works on all screen sizes
 
+## Automatic Background Synchronization
+
+The system now includes **automatic background synchronization** that runs every 10 minutes:
+
+- **Sync Interval**: 10 minutes (600 seconds)
+- **Email Limit**: Processes last 100 emails per sync
+- **Incremental Sync**: Uses checkpoint system to only fetch new emails
+- **Auto-Start**: Background task starts automatically on server startup
+- **Logging**: All sync activities are logged for monitoring
+
+The background sync:
+1. Checks for Gmail connection every 10 minutes
+2. Fetches new emails since last checkpoint
+3. Processes up to 100 emails (if no checkpoint exists)
+4. Updates checkpoint with last processed email
+5. Continues running silently in background
+
+You can also manually sync anytime using the "Refresh Alerts" button.
+
 ## Deployment
 
-The app is configured for VM deployment (always-on) since it:
+The app is configured for **VM deployment (always-on)** since it:
 - Maintains database connections
 - Requires persistent state
-- May implement background sync in future
+- **Runs automatic background sync every 10 minutes**
+- Needs continuous uptime for alert monitoring
 
 To deploy:
-1. Ensure all environment variables are set
+1. Ensure all environment variables are set (DATABASE_URL, GEMINI_API_KEY if using)
 2. Click "Publish" in Replit
-3. App will be deployed with both services running
+3. App will be deployed with both backend and frontend running
+4. Background sync will start automatically
 
 ## Security Notes
 
-⚠️ **Important:**
-1. Gmail app passwords are stored in database (should be encrypted in production)
-2. Login credentials are hardcoded (should use proper auth in production)
-3. Change default admin credentials for production use
+⚠️ **CRITICAL - For Production Deployment:**
+1. **Gmail app passwords are stored in PLAINTEXT** in database
+   - ⚠️ HIGH SECURITY RISK for production use
+   - Recommendation: Use encryption-at-rest or secrets manager
+   - Alternative: Consider using Gmail OAuth integration (available in Replit integrations)
+2. Login credentials are hardcoded (admin/admin)
+   - Must implement proper authentication system
+3. Change default admin credentials before production deployment
 4. CORS is configured for Replit domains only
+5. Consider implementing rate limiting for API endpoints
+
+**For Testing/Development**: Current setup is functional but not production-secure.
 
 ## Troubleshooting
 
@@ -312,6 +340,23 @@ To deploy:
 - Test with different browsers
 
 ## Recent Changes
+
+- **2025-10-06**: Automatic Background Synchronization
+  - **Backend Enhancements**:
+    - Implemented automatic background sync task running every 10 minutes
+    - Changed default email limit from 50 to 100 emails per sync
+    - Background task starts automatically on server startup
+    - Incremental sync continues to use checkpoint system for efficiency
+    - All sync operations logged for monitoring and debugging
+  - **Frontend Updates**:
+    - Updated default sync interval display to 10 minutes
+    - Updated default email limit display to 100
+  - **Deployment**:
+    - Configured for VM (always-on) deployment
+    - Ready for 24-hour production testing
+  - **Security Notice**:
+    - Gmail credentials still stored in plaintext (see Security Notes)
+    - Recommended: Implement encryption before full production deployment
 
 - **2025-10-05**: Alert Lifecycle Management + Performance Optimizations
   - **Backend Enhancements**:

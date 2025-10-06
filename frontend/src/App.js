@@ -127,8 +127,8 @@ function Dashboard({ user, onLogout }) {
   const [gmailEmail, setGmailEmail] = useState("");
   const [gmailPassword, setGmailPassword] = useState("");
   const [gmailConnected, setGmailConnected] = useState(false);
-  const [syncInterval, setSyncInterval] = useState(5);
-  const [emailLimit, setEmailLimit] = useState(50);
+  const [syncInterval, setSyncInterval] = useState(10);
+  const [emailLimit, setEmailLimit] = useState(100);
 
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("All");

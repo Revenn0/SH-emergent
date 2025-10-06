@@ -22,7 +22,7 @@ from functools import lru_cache
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-db_pool: Optional[asyncpg.Pool] = None
+db_pool: asyncpg.Pool = None  # type: ignore
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 if GEMINI_API_KEY:
@@ -64,7 +64,7 @@ class ConnectGmailRequest(BaseModel):
     app_password: str
 
 class SyncRequest(BaseModel):
-    limit: int = 50
+    limit: int = 100
 
 class AcknowledgeRequest(BaseModel):
     acknowledged_by: str
@@ -163,9 +163,11 @@ def categorize_alert(alert_type: str) -> str:
         return "Other"
 
 
+background_task = None
+
 @app.on_event("startup")
 async def startup_db():
-    global db_pool
+    global db_pool, background_task
     database_url = os.environ.get('DATABASE_URL')
     if not database_url:
         raise RuntimeError("DATABASE_URL environment variable not set")
@@ -234,11 +236,104 @@ async def startup_db():
             """,
             DEFAULT_USER_ID, "admin@tracker.com", "Admin", ""
         )
+    
+    background_task = asyncio.create_task(auto_sync_background())
+    logger.info("Background sync task started (10 minute interval)")
 
+async def auto_sync_background():
+    """Background task to automatically sync alerts every 10 minutes"""
+    while True:
+        try:
+            await asyncio.sleep(600)
+            
+            async with db_pool.acquire() as conn:
+                user = await conn.fetchrow(
+                    "SELECT * FROM users WHERE id = $1",
+                    DEFAULT_USER_ID
+                )
+                
+                if user and user['gmail_email'] and user['gmail_app_password']:
+                    logger.info("Starting automatic background sync...")
+                    
+                    try:
+                        imap = connect_imap(user['gmail_email'], user['gmail_app_password'])
+                        imap.select("INBOX")
+                        
+                        checkpoint = await conn.fetchrow(
+                            "SELECT * FROM sync_checkpoints WHERE user_id = $1",
+                            DEFAULT_USER_ID
+                        )
+                        
+                        _, message_numbers = imap.search(None, f'FROM "alerts-no-reply@tracking-update.com"')
+                        email_ids = message_numbers[0].split()
+                        
+                        if checkpoint and checkpoint['last_email_id']:
+                            try:
+                                last_idx = email_ids.index(checkpoint['last_email_id'].encode())
+                                email_ids = email_ids[last_idx + 1:]
+                                logger.info(f"Background sync: processing {len(email_ids)} new emails")
+                            except ValueError:
+                                email_ids = email_ids[-100:]
+                        else:
+                            email_ids = email_ids[-100:]
+                        
+                        if email_ids:
+                            async with db_pool.acquire() as conn2:
+                                existing_ids = await conn2.fetch(
+                                    "SELECT email_id FROM tracker_alerts WHERE user_id = $1",
+                                    DEFAULT_USER_ID
+                                )
+                                existing_set = {row['email_id'] for row in existing_ids}
+                                
+                                email_data_list = []
+                                for email_id in email_ids:
+                                    email_id_str = email_id.decode()
+                                    if email_id_str not in existing_set:
+                                        try:
+                                            _, msg_data = imap.fetch(email_id, "(RFC822)")
+                                            email_body = msg_data[0][1]
+                                            msg = email.message_from_bytes(email_body)
+                                            body = get_email_body(msg)
+                                            email_data_list.append((email_id_str, body))
+                                        except Exception as e:
+                                            logger.error(f"Error fetching email: {str(e)}")
+                                
+                                if email_data_list:
+                                    processed = await process_email_batch(email_data_list)
+                                    last_email_id = email_data_list[-1][0]
+                                    await conn2.execute(
+                                        """
+                                        INSERT INTO sync_checkpoints (user_id, last_email_id, last_sync_at)
+                                        VALUES ($1, $2, CURRENT_TIMESTAMP)
+                                        ON CONFLICT (user_id) DO UPDATE
+                                        SET last_email_id = $2, last_sync_at = CURRENT_TIMESTAMP
+                                        """,
+                                        DEFAULT_USER_ID, last_email_id
+                                    )
+                                    logger.info(f"Background sync completed: {processed} alerts processed")
+                        
+                        imap.logout()
+                    except Exception as e:
+                        logger.error(f"Background sync error: {str(e)}")
+                else:
+                    logger.debug("Background sync skipped: Gmail not connected")
+                    
+        except asyncio.CancelledError:
+            logger.info("Background sync task cancelled")
+            break
+        except Exception as e:
+            logger.error(f"Background sync error: {str(e)}")
 
 @app.on_event("shutdown")
 async def shutdown_db():
-    global db_pool
+    global db_pool, background_task
+    if background_task:
+        background_task.cancel()
+        try:
+            await background_task
+        except asyncio.CancelledError:
+            pass
+        logger.info("Background sync task stopped")
     if db_pool:
         await db_pool.close()
         logger.info("Database pool closed")
