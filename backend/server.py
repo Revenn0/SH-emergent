@@ -429,6 +429,8 @@ async def shutdown_db():
 @api_router.post("/auth/register")
 async def register(request: RegisterRequest):
     """Register a new user"""
+    logger.info(f"Registration attempt: username={request.username}, email={request.email}")
+    
     async with db_pool.acquire() as conn:
         existing = await conn.fetchrow(
             "SELECT id FROM users WHERE username = $1 OR email = $2",
@@ -436,6 +438,7 @@ async def register(request: RegisterRequest):
         )
         
         if existing:
+            logger.warning(f"Registration failed: Username or email already exists - {request.username}/{request.email}")
             raise HTTPException(status_code=400, detail="Username or email already exists")
         
         import uuid
@@ -786,37 +789,118 @@ async def get_categories(current_user: dict = Depends(get_current_user)):
 
 
 @api_router.get("/alerts/list")
-async def list_alerts(category: Optional[str] = Query(None), current_user: dict = Depends(get_current_user)):
-    """Get all tracker alerts with optional category filter"""
+async def list_alerts(
+    category: Optional[str] = Query(None), 
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get tracker alerts with pagination and optional category filter"""
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
             "SELECT * FROM users WHERE id = $1",
             current_user['id']
         )
         
-        if category and category != "All":
-            alerts = await conn.fetch(
-                """
-                SELECT * FROM tracker_alerts 
-                WHERE user_id = $1 AND alert_type = $2
-                ORDER BY created_at DESC
-                """,
-                current_user['id'], category
-            )
-        else:
-            alerts = await conn.fetch(
-                """
-                SELECT * FROM tracker_alerts 
-                WHERE user_id = $1 
-                ORDER BY created_at DESC
-                """,
-                current_user['id']
-            )
+        offset = (page - 1) * limit
+        where_clause = "WHERE user_id = $1"
+        params = [current_user['id']]
         
-        categories = {}
-        for alert in alerts:
-            cat = alert["alert_type"] or "Other"
-            categories[cat] = categories.get(cat, 0) + 1
+        if category and category != "All":
+            where_clause += " AND alert_type = $2"
+            params.append(category)
+        
+        total_count = await conn.fetchval(
+            f"SELECT COUNT(*) FROM tracker_alerts {where_clause}",
+            *params
+        )
+        
+        alerts = await conn.fetch(
+            f"""
+            SELECT * FROM tracker_alerts 
+            {where_clause}
+            ORDER BY created_at DESC
+            LIMIT ${len(params) + 1} OFFSET ${len(params) + 2}
+            """,
+            *params, limit, offset
+        )
+        
+        category_stats = await conn.fetch(
+            f"""
+            SELECT alert_type, COUNT(*) as count 
+            FROM tracker_alerts 
+            {where_clause}
+            GROUP BY alert_type
+            """,
+            *params
+        )
+        
+        categories = {row["alert_type"] or "Other": row["count"] for row in category_stats}
+        
+        unread_count = await conn.fetchval(
+            f"""
+            SELECT COUNT(*) FROM tracker_alerts 
+            {where_clause} AND (acknowledged IS NULL OR acknowledged = FALSE)
+            """,
+            *params
+        ) or 0
+        
+        acknowledged_count = await conn.fetchval(
+            f"""
+            SELECT COUNT(*) FROM tracker_alerts 
+            {where_clause} AND acknowledged = TRUE
+            """,
+            *params
+        ) or 0
+        
+        over_turn_count = await conn.fetchval(
+            f"""
+            SELECT COUNT(*) FROM tracker_alerts 
+            {where_clause} AND alert_type = 'Over-turn'
+            """,
+            *params
+        ) or 0
+        
+        no_communication_count = await conn.fetchval(
+            f"""
+            SELECT COUNT(*) FROM tracker_alerts 
+            {where_clause} AND alert_type LIKE '%No Communication%'
+            """,
+            *params
+        ) or 0
+        
+        heavy_impact_count = await conn.fetchval(
+            f"""
+            SELECT COUNT(*) FROM tracker_alerts 
+            {where_clause} AND alert_type LIKE '%Heavy Impact%'
+            """,
+            *params
+        ) or 0
+        
+        device_alerts_data = await conn.fetch(
+            f"""
+            SELECT tracker_name, array_agg(DISTINCT alert_type) as alert_types
+            FROM tracker_alerts 
+            {where_clause}
+            GROUP BY tracker_name
+            """,
+            *params
+        )
+        
+        high_priority_count = 0
+        heavy_impact_bikes_count = 0
+        
+        for row in device_alerts_data:
+            alert_types = set(row["alert_types"] or [])
+            has_light_sensor = "Light Sensor" in alert_types
+            has_over_turn = "Over-turn" in alert_types
+            has_heavy_impact = any("Heavy Impact" in str(t) for t in alert_types if t)
+            has_no_comm = any("No Communication" in str(t) for t in alert_types if t)
+            
+            if has_light_sensor and has_over_turn:
+                heavy_impact_bikes_count += 1
+            elif has_over_turn or has_heavy_impact or has_no_comm:
+                high_priority_count += 1
         
         alert_list = [
             {
@@ -840,52 +924,28 @@ async def list_alerts(category: Optional[str] = Query(None), current_user: dict 
             for a in alerts
         ]
         
-        over_turn_count = 0
-        no_communication_count = 0
-        heavy_impact_count = 0
-        
-        device_alerts = {}
-        for alert in alerts:
-            device = alert["tracker_name"] or "Unknown"
-            alert_type = alert["alert_type"] or "Other"
-            
-            if device not in device_alerts:
-                device_alerts[device] = set()
-            device_alerts[device].add(alert_type)
-            
-            if alert_type == "Over-turn":
-                over_turn_count += 1
-            elif "No Communication" in alert_type:
-                no_communication_count += 1
-            elif "Heavy Impact" in alert_type:
-                heavy_impact_count += 1
-        
-        high_priority_count = 0
-        heavy_impact_bikes_count = 0
-        
-        for device, alert_types in device_alerts.items():
-            has_light_sensor = "Light Sensor" in alert_types
-            has_over_turn = "Over-turn" in alert_types
-            has_heavy_impact = any("Heavy Impact" in t for t in alert_types)
-            has_no_comm = any("No Communication" in t for t in alert_types)
-            
-            if has_light_sensor and has_over_turn:
-                heavy_impact_bikes_count += 1
-            elif has_over_turn or has_heavy_impact or has_no_comm:
-                high_priority_count += 1
+        total_pages = (total_count + limit - 1) // limit
         
         return {
             "alerts": alert_list,
             "stats": {
-                "total": len(alert_list),
-                "unread": len(alert_list),
+                "total": total_count,
+                "unread": unread_count,
                 "highPriority": high_priority_count,
                 "heavyImpact": heavy_impact_bikes_count,
-                "acknowledged": 0,
+                "acknowledged": acknowledged_count,
                 "overTurn": over_turn_count,
                 "noCommunication": no_communication_count,
                 "heavyImpactAlerts": heavy_impact_count,
                 "categories": categories
+            },
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total": total_count,
+                "total_pages": total_pages,
+                "has_next": page < total_pages,
+                "has_prev": page > 1
             },
             "connected": bool(user and user['gmail_email']),
             "email": user['gmail_email'] if user else None,

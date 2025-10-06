@@ -210,6 +210,17 @@ function Dashboard({ user, onLogout }) {
   const [darkMode, setDarkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("priority");
+  
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 50,
+    total: 0,
+    total_pages: 0,
+    has_next: false,
+    has_prev: false
+  });
 
   useEffect(() => {
     loadAlerts();
@@ -222,12 +233,21 @@ function Dashboard({ user, onLogout }) {
   }, []);
 
   useEffect(() => {
+    setPage(1);
     if (selectedCategory !== "All") {
-      loadAlerts(selectedCategory);
+      loadAlerts(selectedCategory, 1);
     } else {
-      loadAlerts();
+      loadAlerts(null, 1);
     }
   }, [selectedCategory]);
+  
+  useEffect(() => {
+    if (selectedCategory !== "All") {
+      loadAlerts(selectedCategory, page);
+    } else {
+      loadAlerts(null, page);
+    }
+  }, [page]);
 
   useEffect(() => {
     let interval;
@@ -256,17 +276,30 @@ function Dashboard({ user, onLogout }) {
     }
   };
 
-  const loadAlerts = async (category = null) => {
+  const loadAlerts = async (category = null, pageNum = page) => {
     try {
-      const url = category && category !== "All" 
-        ? `/alerts/list?category=${encodeURIComponent(category)}`
-        : "/alerts/list";
+      const params = new URLSearchParams();
+      if (category && category !== "All") {
+        params.append('category', category);
+      }
+      params.append('page', pageNum);
+      params.append('limit', limit);
+      
+      const url = `/alerts/list?${params.toString()}`;
       
       const response = await api.get(url);
       setAlerts(response.data.alerts);
       setStats(response.data.stats);
       setGmailConnected(response.data.connected);
       setGmailEmail(response.data.email || "");
+      setPagination(response.data.pagination || {
+        page: pageNum,
+        limit: limit,
+        total: 0,
+        total_pages: 0,
+        has_next: false,
+        has_prev: false
+      });
       
       groupAlertsByDevice(response.data.alerts);
     } catch (error) {
@@ -779,6 +812,77 @@ function Dashboard({ user, onLogout }) {
                 </tbody>
               </table>
             </div>
+            
+            {pagination.total_pages > 1 && (
+              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                <div className="flex items-center space-x-2 text-sm text-gray-600">
+                  <span>
+                    Showing <span className="font-medium">{((page - 1) * limit) + 1}</span> to{' '}
+                    <span className="font-medium">
+                      {Math.min(page * limit, pagination.total)}
+                    </span> of{' '}
+                    <span className="font-medium">{pagination.total}</span> alerts
+                  </span>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setPage(p => p - 1)}
+                    disabled={!pagination.has_prev}
+                    className={`px-3 py-1.5 rounded text-sm font-medium transition ${
+                      pagination.has_prev
+                        ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        : 'bg-gray-50 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    Previous
+                  </button>
+                  
+                  <div className="flex items-center space-x-1">
+                    {[...Array(pagination.total_pages)].map((_, i) => {
+                      const pageNum = i + 1;
+                      if (
+                        pageNum === 1 ||
+                        pageNum === pagination.total_pages ||
+                        (pageNum >= page - 1 && pageNum <= page + 1)
+                      ) {
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setPage(pageNum)}
+                            className={`px-3 py-1.5 rounded text-sm font-medium transition ${
+                              page === pageNum
+                                ? 'bg-gray-900 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      } else if (
+                        pageNum === page - 2 ||
+                        pageNum === page + 2
+                      ) {
+                        return <span key={pageNum} className="px-2 text-gray-400">...</span>;
+                      }
+                      return null;
+                    })}
+                  </div>
+                  
+                  <button
+                    onClick={() => setPage(p => p + 1)}
+                    disabled={!pagination.has_next}
+                    className={`px-3 py-1.5 rounded text-sm font-medium transition ${
+                      pagination.has_next
+                        ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        : 'bg-gray-50 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
