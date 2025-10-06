@@ -332,7 +332,7 @@ async def startup_db():
         logger.error("FATAL: DATABASE_URL environment variable not set")
         raise RuntimeError("DATABASE_URL environment variable not set")
     
-    logger.info(f"Connecting to database: {database_url[:30]}...")
+    logger.info("Connecting to database...")
     
     try:
         db_pool = await asyncpg.create_pool(database_url, min_size=2, max_size=10)
@@ -452,8 +452,7 @@ async def startup_db():
                     """
                     INSERT INTO users (id, username, email, password_hash, full_name)
                     VALUES ($1, $2, $3, $4, $5)
-                    ON CONFLICT (username) DO UPDATE 
-                    SET password_hash = EXCLUDED.password_hash
+                    ON CONFLICT (username) DO NOTHING
                     """,
                     admin_id, "admin", "admin@tracker.com", admin_password_hash, "Administrator"
                 )
