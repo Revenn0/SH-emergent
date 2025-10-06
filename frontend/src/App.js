@@ -277,6 +277,18 @@ function Dashboard({ user, onLogout }) {
     }
   };
 
+  const handleClearHistory = async () => {
+    if (!window.confirm("⚠️ Limpar TODO o histórico?\n\nIsto irá:\n- Deletar todos os alertas\n- Resetar checkpoint de sincronização\n- Começar do zero\n\nNão pode ser desfeito!")) return;
+    
+    try {
+      await api.delete("/alerts/clear-all/history");
+      await loadAlerts();
+      alert("✓ Histórico limpo com sucesso! Sistema resetado.");
+    } catch (error) {
+      alert("Erro ao limpar histórico");
+    }
+  };
+
   const openAlertModal = (group) => {
     setSelectedAlert(group);
     setShowModal(true);
@@ -775,6 +787,24 @@ function Dashboard({ user, onLogout }) {
         <button className="mt-4 px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition text-sm">
           Save Configuration
         </button>
+      </div>
+
+      <div className="bg-white rounded-lg border border-red-200 p-6">
+        <h3 className="text-sm font-semibold text-gray-900 mb-2">Danger Zone</h3>
+        <p className="text-xs text-gray-500 mb-4">Ações irreversíveis - use com cuidado</p>
+        <div className="flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-md">
+          <div>
+            <p className="text-sm font-medium text-red-900">Limpar Todo Histórico</p>
+            <p className="text-xs text-red-700 mt-0.5">Deleta todos os alertas e reseta checkpoint de sincronização</p>
+          </div>
+          <button
+            onClick={handleClearHistory}
+            className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 transition"
+          >
+            <Trash2 className="inline w-4 h-4 mr-1" />
+            Limpar Tudo
+          </button>
+        </div>
       </div>
     </div>
   );

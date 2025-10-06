@@ -718,6 +718,22 @@ async def delete_alert(alert_id: int):
     return {"success": True}
 
 
+@api_router.delete("/alerts/clear-all/history")
+async def clear_all_alerts():
+    """Clear all alerts and sync checkpoint (reset system)"""
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "DELETE FROM tracker_alerts WHERE user_id = $1",
+            DEFAULT_USER_ID
+        )
+        await conn.execute(
+            "DELETE FROM sync_checkpoints WHERE user_id = $1",
+            DEFAULT_USER_ID
+        )
+    
+    return {"success": True, "message": "All alerts and sync history cleared"}
+
+
 @api_router.post("/alerts/{alert_id}/acknowledge")
 async def acknowledge_alert(alert_id: int, request: AcknowledgeRequest):
     """Acknowledge an alert"""
