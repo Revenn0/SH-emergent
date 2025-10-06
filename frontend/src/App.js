@@ -12,46 +12,22 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 const api = axios.create({
-  baseURL: API
+  baseURL: API,
+  withCredentials: true
 });
-
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
 
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
     
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/refresh')) {
       originalRequest._retry = true;
       
       try {
-        const refreshToken = localStorage.getItem('refresh_token');
-        if (refreshToken) {
-          const response = await axios.post(`${API}/auth/refresh`, {
-            refresh_token: refreshToken
-          });
-          
-          const { access_token, refresh_token: newRefreshToken } = response.data;
-          localStorage.setItem('access_token', access_token);
-          localStorage.setItem('refresh_token', newRefreshToken);
-          
-          originalRequest.headers.Authorization = `Bearer ${access_token}`;
-          return api(originalRequest);
-        }
+        await axios.post(`${API}/auth/refresh`, {}, { withCredentials: true });
+        return api(originalRequest);
       } catch (refreshError) {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        window.location.href = '/';
         return Promise.reject(refreshError);
       }
     }
@@ -79,9 +55,7 @@ function LoginPage({ onLogin }) {
       
       const response = await api.post(endpoint, payload);
       
-      if (response.data.access_token) {
-        localStorage.setItem('access_token', response.data.access_token);
-        localStorage.setItem('refresh_token', response.data.refresh_token);
+      if (response.data.user) {
         onLogin(response.data.user);
       }
     } catch (err) {
@@ -780,9 +754,10 @@ function Dashboard({ user, onLogout }) {
                           </span>
                         </td>
                         <td className="py-3 px-4">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-sm font-semibold text-gray-900">{group.device}</span>
-                            <span className="inline-flex items-center justify-center w-5 h-5 bg-gray-900 text-white text-xs font-bold rounded">
+                          <div className="flex items-center space-x-3">
+                            <Bike className="w-5 h-5 text-gray-700" strokeWidth={2} />
+                            <span className="text-base font-bold text-gray-900">{group.device}</span>
+                            <span className="inline-flex items-center justify-center min-w-7 h-7 px-2 bg-gray-900 text-white text-sm font-bold rounded-md">
                               {getCountBadge(group.count)}
                             </span>
                           </div>
@@ -1131,76 +1106,130 @@ function Dashboard({ user, onLogout }) {
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" onClick={() => setShowModal(false)}>
-        <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-          <div className="p-6 border-b border-gray-200">
+        <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+          
+          {/* Header com Device */}
+          <div className="px-8 py-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
             <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">Alert Details</h2>
-                <p className="text-sm text-gray-500 mt-1">Device: {selectedAlert.device}</p>
+              <div className="flex items-center space-x-4">
+                <div className="p-3 bg-gray-900 rounded-lg">
+                  <Bike className="w-8 h-8 text-white" strokeWidth={2} />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-3">
+                    <h2 className="text-2xl font-bold text-gray-900">{selectedAlert.device}</h2>
+                    <span className="inline-flex items-center justify-center min-w-8 h-8 px-3 bg-gray-900 text-white text-base font-bold rounded-lg">
+                      {selectedAlert.count}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">Motorcycle Alert Details</p>
+                </div>
               </div>
               <button onClick={() => setShowModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition">
-                <X className="w-5 h-5" />
+                <X className="w-6 h-6 text-gray-500" />
               </button>
             </div>
           </div>
 
-          <div className="p-6 space-y-6">
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div>
-                <p className="text-xs text-gray-600 mb-1">Alert Count</p>
-                <p className="text-2xl font-bold text-gray-900">{selectedAlert.count}</p>
-              </div>
-              <div className={`px-4 py-2 rounded-lg ${
-                selectedAlert.severity === "heavy-impact" ? "bg-red-100 text-red-700" :
-                selectedAlert.severity === "high" ? "bg-orange-100 text-orange-700" :
-                "bg-blue-100 text-blue-700"
-              }`}>
-                <p className="text-xs font-medium">
-                  {selectedAlert.severity === "heavy-impact" ? "HEAVY IMPACT" :
-                   selectedAlert.severity === "high" ? "HIGH PRIORITY" : "NORMAL"}
-                </p>
+          {/* Status Summary */}
+          <div className="px-8 py-5 bg-gray-50 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-6">
+                <div className="flex items-center space-x-2">
+                  <Activity className="w-5 h-5 text-gray-600" />
+                  <div>
+                    <p className="text-xs font-medium text-gray-500">Total Alerts</p>
+                    <p className="text-lg font-bold text-gray-900">{selectedAlert.count}</p>
+                  </div>
+                </div>
+                <div className="h-12 w-px bg-gray-300"></div>
+                <div className="flex items-center space-x-2">
+                  <AlertTriangle className="w-5 h-5 text-orange-600" />
+                  <div>
+                    <p className="text-xs font-medium text-gray-500">Priority Level</p>
+                    <div className={`mt-1 inline-flex px-3 py-1 rounded-md text-xs font-bold ${
+                      selectedAlert.severity === "heavy-impact" ? "bg-red-100 text-red-700" :
+                      selectedAlert.severity === "high" ? "bg-orange-100 text-orange-700" :
+                      "bg-blue-100 text-blue-700"
+                    }`}>
+                      {selectedAlert.severity === "heavy-impact" ? "HEAVY IMPACT" :
+                       selectedAlert.severity === "high" ? "HIGH PRIORITY" : "NORMAL"}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
+          </div>
 
+          {/* Alert List */}
+          <div className="px-8 py-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <Bell className="w-5 h-5 mr-2 text-gray-700" />
+              Alert History
+            </h3>
             <div className="space-y-4">
               {selectedAlert.alerts.map((alert, idx) => (
-                <div key={idx} className="p-4 border border-gray-200 rounded-lg space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{alert.alert_type}</h3>
-                      <p className="text-xs text-gray-500 mt-1">{alert.alert_time}</p>
+                <div key={idx} className="p-5 bg-white border-2 border-gray-200 rounded-xl hover:border-gray-300 transition space-y-4">
+                  
+                  {/* Alert Header */}
+                  <div className="flex items-start justify-between pb-3 border-b border-gray-100">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 bg-red-50 rounded-lg">
+                        <AlertTriangle className="w-5 h-5 text-red-600" />
+                      </div>
+                      <div>
+                        <h4 className="text-base font-bold text-gray-900">{alert.alert_type}</h4>
+                        <div className="flex items-center space-x-2 mt-1">
+                          <Clock className="w-3.5 h-3.5 text-gray-400" />
+                          <p className="text-sm text-gray-500">{alert.alert_time}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-xs text-gray-600 mb-1">Location</p>
-                      <p className="text-gray-900">{alert.location || "Unknown"}</p>
+                  {/* Alert Details Grid */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                      <MapPin className="w-5 h-5 text-blue-600 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-gray-600 mb-1">Location</p>
+                        <p className="text-sm text-gray-900 break-words">{alert.location || "Unknown"}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-600 mb-1">Coordinates</p>
-                      <p className="text-gray-900">{alert.latitude}, {alert.longitude}</p>
+                    <div className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                      <MapPin className="w-5 h-5 text-green-600 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-gray-600 mb-1">Coordinates</p>
+                        <p className="text-sm text-gray-900 font-mono">{alert.latitude}, {alert.longitude}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-600 mb-1">Device Serial</p>
-                      <p className="text-gray-900">{alert.device_serial}</p>
+                    <div className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                      <Database className="w-5 h-5 text-purple-600 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-gray-600 mb-1">Device Serial</p>
+                        <p className="text-sm text-gray-900 font-mono">{alert.device_serial}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-gray-600 mb-1">Account</p>
-                      <p className="text-gray-900">{alert.account_name || "Unknown"}</p>
+                    <div className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                      <Info className="w-5 h-5 text-orange-600 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-gray-600 mb-1">Account</p>
+                        <p className="text-sm text-gray-900">{alert.account_name || "Unknown"}</p>
+                      </div>
                     </div>
                   </div>
 
+                  {/* Map Link */}
                   {alert.latitude && alert.longitude && (
-                    <div className="flex items-center space-x-2 text-xs text-blue-600">
-                      <MapPin className="w-3 h-3" />
+                    <div className="pt-3 border-t border-gray-100">
                       <a 
                         href={`https://www.google.com/maps?q=${alert.latitude},${alert.longitude}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="hover:underline"
+                        className="inline-flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition"
                       >
-                        View on Google Maps
+                        <MapPin className="w-4 h-4" />
+                        <span>View Location on Google Maps</span>
                       </a>
                     </div>
                   )}
@@ -1209,10 +1238,11 @@ function Dashboard({ user, onLogout }) {
             </div>
           </div>
 
-          <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
+          {/* Footer Actions */}
+          <div className="px-8 py-5 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
             <button
               onClick={() => setShowModal(false)}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition text-sm"
+              className="px-5 py-2.5 border-2 border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-white transition"
             >
               Close
             </button>
@@ -1221,9 +1251,10 @@ function Dashboard({ user, onLogout }) {
                 handleDeleteAlert(selectedAlert.latestAlert.id);
                 setShowModal(false);
               }}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition text-sm"
+              className="flex items-center space-x-2 px-5 py-2.5 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition"
             >
-              Delete Alert
+              <Trash2 className="w-4 h-4" />
+              <span>Delete Alert</span>
             </button>
           </div>
         </div>
@@ -1261,15 +1292,10 @@ function App() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const token = localStorage.getItem("access_token");
-      if (token) {
-        try {
-          const response = await api.get("/auth/me");
-          setUser(response.data);
-        } catch (error) {
-          localStorage.removeItem("access_token");
-          localStorage.removeItem("refresh_token");
-        }
+      try {
+        const response = await api.get("/auth/me");
+        setUser(response.data);
+      } catch (error) {
       }
       setLoading(false);
     };
@@ -1280,10 +1306,12 @@ function App() {
     setUser(userData);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await api.post("/auth/logout");
+    } catch (error) {
+    }
     setUser(null);
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
   };
 
   if (loading) {

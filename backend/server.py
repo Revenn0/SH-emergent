@@ -1,9 +1,10 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Query, Depends, Header
+from fastapi import FastAPI, APIRouter, HTTPException, Query, Depends, Header, Request
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
+from starlette.responses import Response
 import asyncpg
 import os
 import logging
@@ -21,6 +22,7 @@ from functools import lru_cache
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 import secrets
+import hashlib
 
 
 ROOT_DIR = Path(__file__).parent
@@ -212,9 +214,48 @@ def verify_token(token: str, token_type: str = "access") -> dict:
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Dependency to get current authenticated user"""
-    token = credentials.credentials
+def hash_token(token: str) -> str:
+    """Create SHA256 hash of token"""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+async def store_refresh_token(user_id: str, token: str):
+    """Store refresh token hash in database"""
+    token_hash = hash_token(token)
+    expires_at = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
+            VALUES ($1, $2, $3)
+            """,
+            user_id, token_hash, expires_at
+        )
+
+async def validate_refresh_token(token: str) -> Optional[str]:
+    """Validate refresh token against database and return user_id if valid"""
+    token_hash = hash_token(token)
+    
+    async with db_pool.acquire() as conn:
+        result = await conn.fetchrow(
+            """
+            SELECT user_id, expires_at FROM refresh_tokens 
+            WHERE token_hash = $1 AND expires_at > CURRENT_TIMESTAMP
+            """,
+            token_hash
+        )
+        
+        if result:
+            return result['user_id']
+        return None
+
+async def get_current_user(request: Request):
+    """Dependency to get current authenticated user from cookie"""
+    token = request.cookies.get("access_token")
+    
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
     payload = verify_token(token, "access")
     user_id = payload.get("sub")
     
@@ -402,6 +443,19 @@ async def startup_db():
             """
         )
         
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS refresh_tokens (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR NOT NULL,
+                token_hash VARCHAR NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """
+        )
+        
         admin_exists = await conn.fetchval(
             "SELECT COUNT(*) FROM users WHERE username = 'admin'"
         )
@@ -466,7 +520,7 @@ async def shutdown_db():
 
 
 @api_router.post("/auth/register")
-async def register(request: RegisterRequest):
+async def register(request: RegisterRequest, response: Response):
     """Register a new user"""
     logger.info(f"Registration attempt: username={request.username}, email={request.email}")
     
@@ -495,23 +549,41 @@ async def register(request: RegisterRequest):
         access_token = create_access_token({"sub": user_id})
         refresh_token = create_refresh_token({"sub": user_id})
         
+        await store_refresh_token(user_id, refresh_token)
+        
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        )
+        
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+        )
+        
         logger.info(f"New user registered: {request.username}")
         
-        return TokenResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            user={
+        return {
+            "user": {
                 "id": user_id,
                 "username": request.username,
                 "email": request.email,
                 "full_name": request.full_name
             }
-        )
+        }
 
 
 @api_router.post("/auth/login")
-async def login(request: LoginRequest):
-    """Login with JWT authentication"""
+async def login(request: LoginRequest, response: Response):
+    """Login with JWT authentication using HttpOnly cookies"""
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
             "SELECT id, username, email, password_hash, full_name FROM users WHERE username = $1",
@@ -529,28 +601,50 @@ async def login(request: LoginRequest):
         access_token = create_access_token({"sub": user['id']})
         refresh_token = create_refresh_token({"sub": user['id']})
         
+        await store_refresh_token(user['id'], refresh_token)
+        
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        )
+        
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+        )
+        
         logger.info(f"User logged in: {request.username}")
         
-        return TokenResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            user={
+        return {
+            "user": {
                 "id": user['id'],
                 "username": user['username'],
                 "email": user['email'],
                 "full_name": user['full_name']
             }
-        )
+        }
 
 
 @api_router.post("/auth/refresh")
-async def refresh_token_endpoint(request: RefreshTokenRequest):
-    """Refresh access token using refresh token"""
-    payload = verify_token(request.refresh_token, "refresh")
-    user_id = payload.get("sub")
+async def refresh_token_endpoint(req: Request, response: Response):
+    """Refresh access token using refresh token from cookie"""
+    refresh_token = req.cookies.get("refresh_token")
+    
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="No refresh token provided")
+    
+    user_id = await validate_refresh_token(refresh_token)
     
     if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
     
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
@@ -560,26 +654,82 @@ async def refresh_token_endpoint(request: RefreshTokenRequest):
         
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
+        
+        await conn.execute(
+            "DELETE FROM refresh_tokens WHERE token_hash = $1",
+            hash_token(refresh_token)
+        )
     
     access_token = create_access_token({"sub": user_id})
     new_refresh_token = create_refresh_token({"sub": user_id})
     
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=new_refresh_token,
-        user={
+    await store_refresh_token(user_id, new_refresh_token)
+    
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    )
+    
+    response.set_cookie(
+        key="refresh_token",
+        value=new_refresh_token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+    )
+    
+    return {
+        "user": {
             "id": user['id'],
             "username": user['username'],
             "email": user['email'],
             "full_name": user['full_name']
         }
-    )
+    }
 
 
 @api_router.get("/auth/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
     """Get current authenticated user"""
     return current_user
+
+
+@api_router.post("/auth/logout")
+async def logout(req: Request, response: Response):
+    """Logout user by clearing cookies and removing refresh token from DB"""
+    refresh_token = req.cookies.get("refresh_token")
+    
+    if refresh_token:
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                "DELETE FROM refresh_tokens WHERE token_hash = $1",
+                hash_token(refresh_token)
+            )
+    
+    response.set_cookie(
+        key="access_token",
+        value="",
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=0
+    )
+    
+    response.set_cookie(
+        key="refresh_token",
+        value="",
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=0
+    )
+    
+    return {"success": True, "message": "Logged out successfully"}
 
 
 def connect_imap(email_addr: str, app_password: str):

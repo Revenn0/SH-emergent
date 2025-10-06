@@ -13,18 +13,32 @@ The system employs a client-server architecture with a Python FastAPI backend an
 - **Design**: Minimal, clean design with a grayscale color palette and accent colors.
 - **Typography**: Clean typography with clear hierarchy, using system fonts.
 - **Layout**: Collapsible sidebar navigation, professional table designs with hover states, and a responsive layout for all screen sizes.
-- **Branding**: Bike icon for branding on the login page.
+- **Branding**: Bike icon for branding on the login page and enhanced motorcycle icons in the dashboard.
 - **Status Indicators**: Color-coded indicators for quick scanning of alert severities.
+- **Enhanced Device Display**: 
+    - Motorcycle badge in table with prominent bike icon, larger bold text, and visible alert count badge
+    - Larger, more prominent device identification in alert modals
+- **Alert Modal Improvements**: 
+    - Redesigned with clear visual hierarchy and sections
+    - Prominent device header with motorcycle icon and alert count
+    - Status summary section with visual indicators
+    - Individual alert cards with color-coded icons
+    - Improved information layout with icons for Location, Coordinates, Device Serial, and Account
+    - Prominent Google Maps integration button
+    - Better action button placement and styling
 
 ### Technical Implementations
-- **Authentication System**: JWT-based authentication with multi-user support:
+- **Authentication System**: Secure cookie-based JWT authentication with multi-user support:
+    - **HttpOnly Cookies**: Access and refresh tokens stored in secure HttpOnly cookies (not localStorage)
     - Access tokens (60min expiry) and refresh tokens (7 days expiry) using HS256 algorithm
+    - Refresh tokens stored as SHA256 hashes in `refresh_tokens` database table with expiration tracking
+    - Token revocation support via database-backed refresh token management
     - Argon2 password hashing for secure credential storage
     - User registration with email validation
-    - Automatic token refresh via axios interceptors on 401 responses
-    - All API routes protected via JWT dependency injection
+    - Automatic token refresh on 401 responses with cookie-based flow
+    - All API routes protected via JWT dependency injection from cookies
     - Admin user auto-created on startup (username: `admin`, password: `dimension`)
-    - **Security Note**: Current implementation stores refresh tokens in localStorage (XSS vulnerability). For production, migrate to httpOnly cookies for enhanced security.
+    - **Security**: HttpOnly, Secure, SameSite=lax cookies protect against XSS and CSRF attacks
 - **Dashboard**: Features status cards for system health, total alerts, unread, high priority, and acknowledged alerts.
 - **Alert Grouping**: Alerts are grouped by `tracker_name` (motorcycle) with a badge system indicating the number of alerts per bike.
 - **Priority System**:
@@ -54,6 +68,8 @@ The system employs a client-server architecture with a Python FastAPI backend an
     - `users` table: Stores user authentication and Gmail configuration (`id`, `username`, `password_hash`, `email`, `full_name`, `gmail_email`, `gmail_app_password`, `created_at`, `updated_at`).
     - `tracker_alerts` table: Stores parsed alert data (`id`, `user_id`, `email_id`, `alert_type`, `alert_time`, `location`, `latitude`, `longitude`, `device_serial`, `tracker_name`, `account_name`, `raw_body`, `created_at`, `status`, `acknowledged`, `acknowledged_at`, `acknowledged_by`, `notes`, `assigned_to`, `favorite`).
     - `sync_checkpoints` table: For incremental email synchronization (per-user tracking).
+    - `refresh_tokens` table: Stores hashed refresh tokens for secure session management and token revocation.
+- **Database Migration**: `migration_to_production.sql` script available in project root for migrating development data to production database with complete instructions and validation steps.
 - **Deployment**: Configured for VM (always-on) deployment due to persistent state, continuous uptime requirement for alert monitoring, and background synchronization.
 
 ## External Dependencies
