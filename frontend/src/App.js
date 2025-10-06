@@ -15,11 +15,58 @@ const api = axios.create({
   baseURL: API
 });
 
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      
+      try {
+        const refreshToken = localStorage.getItem('refresh_token');
+        if (refreshToken) {
+          const response = await axios.post(`${API}/auth/refresh`, {
+            refresh_token: refreshToken
+          });
+          
+          const { access_token, refresh_token: newRefreshToken } = response.data;
+          localStorage.setItem('access_token', access_token);
+          localStorage.setItem('refresh_token', newRefreshToken);
+          
+          originalRequest.headers.Authorization = `Bearer ${access_token}`;
+          return api(originalRequest);
+        }
+      } catch (refreshError) {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        window.location.href = '/';
+        return Promise.reject(refreshError);
+      }
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
 function LoginPage({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isRegister, setIsRegister] = useState(false);
+  const [email, setEmail] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -27,14 +74,18 @@ function LoginPage({ onLogin }) {
     setError("");
 
     try {
-      const response = await api.post("/auth/login", { username, password });
-      if (response.data.success) {
+      const endpoint = isRegister ? "/auth/register" : "/auth/login";
+      const payload = isRegister ? { username, email, password } : { username, password };
+      
+      const response = await api.post(endpoint, payload);
+      
+      if (response.data.access_token) {
+        localStorage.setItem('access_token', response.data.access_token);
+        localStorage.setItem('refresh_token', response.data.refresh_token);
         onLogin(response.data.user);
-      } else {
-        setError("Invalid credentials");
       }
     } catch (err) {
-      setError(err.response?.data?.detail || "Login failed");
+      setError(err.response?.data?.detail || (isRegister ? "Registration failed" : "Login failed"));
     } finally {
       setLoading(false);
     }
@@ -49,7 +100,7 @@ function LoginPage({ onLogin }) {
               <Bike className="w-16 h-16 text-gray-900" strokeWidth={1.5} />
             </div>
             <h1 className="text-2xl font-semibold text-gray-900 mb-2">Tracker Alerts System</h1>
-            <p className="text-sm text-gray-600">Sign in to access the dashboard</p>
+            <p className="text-sm text-gray-600">{isRegister ? "Create your account" : "Sign in to access the dashboard"}</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -66,6 +117,22 @@ function LoginPage({ onLogin }) {
                 required
               />
             </div>
+
+            {isRegister && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none text-sm"
+                  placeholder="Enter email"
+                  required
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -92,8 +159,21 @@ function LoginPage({ onLogin }) {
               disabled={loading}
               className="w-full bg-gray-900 text-white py-2.5 rounded-md font-medium hover:bg-gray-800 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
-              {loading ? "Signing in..." : "Sign in"}
+              {loading ? (isRegister ? "Creating account..." : "Signing in...") : (isRegister ? "Create Account" : "Sign in")}
             </button>
+
+            <div className="text-center mt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRegister(!isRegister);
+                  setError("");
+                }}
+                className="text-sm text-gray-600 hover:text-gray-900 transition"
+              >
+                {isRegister ? "Already have an account? Sign in" : "Need an account? Register"}
+              </button>
+            </div>
           </form>
         </div>
       </div>
@@ -1057,21 +1137,30 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    setLoading(false);
+    const checkAuth = async () => {
+      const token = localStorage.getItem("access_token");
+      if (token) {
+        try {
+          const response = await api.get("/auth/me");
+          setUser(response.data);
+        } catch (error) {
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("refresh_token");
+        }
+      }
+      setLoading(false);
+    };
+    checkAuth();
   }, []);
 
   const handleLogin = (userData) => {
     setUser(userData);
-    localStorage.setItem("user", JSON.stringify(userData));
   };
 
   const handleLogout = () => {
     setUser(null);
-    localStorage.removeItem("user");
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
   };
 
   if (loading) {
