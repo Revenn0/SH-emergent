@@ -17,7 +17,14 @@ The system employs a client-server architecture with a Python FastAPI backend an
 - **Status Indicators**: Color-coded indicators for quick scanning of alert severities.
 
 ### Technical Implementations
-- **Login System**: Database-based authentication with Argon2 password hashing for secure credential storage. Admin user is automatically created on server startup in both development and production environments. Production login: username `admin` / password `dimension`.
+- **Authentication System**: JWT-based authentication with multi-user support:
+    - Access tokens (60min expiry) and refresh tokens (7 days expiry) using HS256 algorithm
+    - Argon2 password hashing for secure credential storage
+    - User registration with email validation
+    - Automatic token refresh via axios interceptors on 401 responses
+    - All API routes protected via JWT dependency injection
+    - Admin user auto-created on startup (username: `admin`, password: `dimension`)
+    - **Security Note**: Current implementation stores refresh tokens in localStorage (XSS vulnerability). For production, migrate to httpOnly cookies for enhanced security.
 - **Dashboard**: Features status cards for system health, total alerts, unread, high priority, and acknowledged alerts.
 - **Alert Grouping**: Alerts are grouped by `tracker_name` (motorcycle) with a badge system indicating the number of alerts per bike.
 - **Priority System**:
@@ -38,9 +45,9 @@ The system employs a client-server architecture with a Python FastAPI backend an
 - **Backend (Port 8080)**: FastAPI with PostgreSQL, handling email parsing, alert categorization, IMAP client operations, and alert grouping logic.
 - **Frontend (Port 5000)**: React SPA with Tailwind CSS and Lucide React icons, providing a responsive user interface across "Bike Tracker", "Admin Dashboard", and "Service Tracker" views. Uses local storage for session management.
 - **Database Schema**:
-    - `users` table: Stores user authentication and Gmail configuration (`id`, `username`, `password_hash`, `email`, `name`, `picture`, `gmail_email`, `gmail_app_password`, `created_at`).
+    - `users` table: Stores user authentication and Gmail configuration (`id`, `username`, `password_hash`, `email`, `full_name`, `gmail_email`, `gmail_app_password`, `created_at`, `updated_at`).
     - `tracker_alerts` table: Stores parsed alert data (`id`, `user_id`, `email_id`, `alert_type`, `alert_time`, `location`, `latitude`, `longitude`, `device_serial`, `tracker_name`, `account_name`, `raw_body`, `created_at`, `status`, `acknowledged`, `acknowledged_at`, `acknowledged_by`, `notes`, `assigned_to`, `favorite`).
-    - `sync_checkpoints` table: For incremental email synchronization.
+    - `sync_checkpoints` table: For incremental email synchronization (per-user tracking).
 - **Deployment**: Configured for VM (always-on) deployment due to persistent state, continuous uptime requirement for alert monitoring, and background synchronization.
 
 ## External Dependencies
