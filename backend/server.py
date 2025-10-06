@@ -355,6 +355,20 @@ async def shutdown_db():
         logger.info("Database pool closed")
 
 
+@api_router.get("/auth/debug")
+async def debug_auth():
+    """Debug endpoint to check user existence"""
+    async with db_pool.acquire() as conn:
+        user = await conn.fetchrow(
+            "SELECT id, username, email, password_hash FROM users WHERE username = 'admin'"
+        )
+        return {
+            "user_exists": user is not None,
+            "has_password": user['password_hash'] is not None if user else False,
+            "username": user['username'] if user else None
+        }
+
+
 @api_router.post("/auth/login")
 async def login(request: LoginRequest):
     """Login with database authentication"""
@@ -364,11 +378,21 @@ async def login(request: LoginRequest):
             request.username
         )
         
-        if not user or not user['password_hash']:
+        if not user:
+            logger.warning(f"Login attempt for non-existent user: {request.username}")
             raise HTTPException(status_code=401, detail="Invalid credentials")
         
-        if not pwd_context.verify(request.password, user['password_hash']):
+        if not user['password_hash']:
+            logger.error(f"User {request.username} has no password hash")
             raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        try:
+            if not pwd_context.verify(request.password, user['password_hash']):
+                logger.warning(f"Invalid password for user: {request.username}")
+                raise HTTPException(status_code=401, detail="Invalid credentials")
+        except Exception as e:
+            logger.error(f"Password verification error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Authentication error")
         
         return {
             "success": True,
