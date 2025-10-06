@@ -76,5 +76,5 @@ externalPort = 3001
 
 [deployment]
 deploymentTarget = "vm"
-run = ["uvicorn", "backend.server:app", "--host", "0.0.0.0", "--port", "5000"]
-build = ["bash", "-c", "cd frontend && export REACT_APP_BACKEND_URL='' && yarn install && yarn build"]
+run = ["bash", "-c", "uvicorn backend.server:app --host 0.0.0.0 --port ${PORT:-5000}"]
+build = ["bash", "build.sh"]
