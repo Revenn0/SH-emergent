@@ -52,11 +52,13 @@ REFRESH_TOKEN_EXPIRE_DAYS = 7
 security = HTTPBearer()
 
 ALERT_CATEGORIES = [
+    "Crash Detected",
     "Heavy Impact",
     "Light Sensor",
     "Out Of Country",
     "No Communication",
     "Over-turn",
+    "Tamper Alert",
     "Low Battery",
     "Motion",
     "New Positions",
@@ -107,6 +109,9 @@ class AddNoteRequest(BaseModel):
 
 class AssignRequest(BaseModel):
     assigned_to: str
+
+class AddBikeNoteRequest(BaseModel):
+    note: str
 
 async def sync_emails_background(user: dict, limit: int = 100) -> int:
     """Simple email sync for background task - returns count of new emails"""
@@ -336,6 +341,8 @@ def categorize_alert(alert_type: str) -> str:
         return "No Communication"
     elif "over-turn" in alert_lower or "overturn" in alert_lower:
         return "Over-turn"
+    elif "tamper" in alert_lower:
+        return "Tamper Alert"
     elif "low battery" in alert_lower:
         return "Low Battery"
     elif "motion" in alert_lower:
@@ -423,6 +430,52 @@ async def startup_db():
                 last_email_id VARCHAR,
                 last_sync_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+            """
+        )
+        
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bikes (
+                id SERIAL PRIMARY KEY,
+                user_id VARCHAR NOT NULL,
+                tracker_name VARCHAR NOT NULL,
+                device_serial VARCHAR,
+                latest_alert_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, tracker_name)
+            )
+            """
+        )
+        
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_bikes_user_id ON bikes(user_id)
+            """
+        )
+        
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_bikes_tracker_name ON bikes(tracker_name)
+            """
+        )
+        
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bike_notes (
+                id SERIAL PRIMARY KEY,
+                bike_id INTEGER NOT NULL,
+                user_id VARCHAR NOT NULL,
+                note TEXT NOT NULL,
+                author VARCHAR NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (bike_id) REFERENCES bikes(id) ON DELETE CASCADE
+            )
+            """
+        )
+        
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_bike_notes_bike_id ON bike_notes(bike_id)
             """
         )
         
@@ -1160,6 +1213,205 @@ async def toggle_favorite(alert_id: int, current_user: dict = Depends(get_curren
         )
     
     return {"success": True, "favorite": new_value}
+
+
+@api_router.get("/bikes/list")
+async def list_bikes(current_user: dict = Depends(get_current_user)):
+    """Get all bikes for the current user with alert counts"""
+    async with db_pool.acquire() as conn:
+        bikes = await conn.fetch(
+            """
+            SELECT DISTINCT ON (tracker_name) 
+                tracker_name, device_serial,
+                MAX(created_at) as latest_alert_at
+            FROM tracker_alerts
+            WHERE user_id = $1
+            GROUP BY tracker_name, device_serial
+            ORDER BY tracker_name, MAX(created_at) DESC
+            """,
+            current_user['id']
+        )
+        
+        result = []
+        for bike_row in bikes:
+            bike_id_row = await conn.fetchrow(
+                """
+                INSERT INTO bikes (user_id, tracker_name, device_serial, latest_alert_at)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (user_id, tracker_name) 
+                DO UPDATE SET 
+                    latest_alert_at = EXCLUDED.latest_alert_at,
+                    device_serial = EXCLUDED.device_serial
+                RETURNING id
+                """,
+                current_user['id'], bike_row['tracker_name'], 
+                bike_row['device_serial'], bike_row['latest_alert_at']
+            )
+            
+            alert_count = await conn.fetchval(
+                """
+                SELECT COUNT(*) FROM tracker_alerts
+                WHERE user_id = $1 AND tracker_name = $2
+                """,
+                current_user['id'], bike_row['tracker_name']
+            )
+            
+            notes_count = await conn.fetchval(
+                """
+                SELECT COUNT(*) FROM bike_notes
+                WHERE bike_id = $1
+                """,
+                bike_id_row['id']
+            )
+            
+            result.append({
+                "id": bike_id_row['id'],
+                "tracker_name": bike_row['tracker_name'],
+                "device_serial": bike_row['device_serial'],
+                "latest_alert_at": bike_row['latest_alert_at'].isoformat() if bike_row['latest_alert_at'] else None,
+                "alert_count": alert_count,
+                "notes_count": notes_count
+            })
+        
+        return {"bikes": result}
+
+
+@api_router.get("/bikes/{bike_id}/history")
+async def get_bike_history(bike_id: int, current_user: dict = Depends(get_current_user)):
+    """Get bike details with alerts and notes history"""
+    async with db_pool.acquire() as conn:
+        bike = await conn.fetchrow(
+            """
+            SELECT * FROM bikes
+            WHERE id = $1 AND user_id = $2
+            """,
+            bike_id, current_user['id']
+        )
+        
+        if not bike:
+            raise HTTPException(status_code=404, detail="Bike not found")
+        
+        alerts = await conn.fetch(
+            """
+            SELECT * FROM tracker_alerts
+            WHERE user_id = $1 AND tracker_name = $2
+            ORDER BY created_at DESC
+            LIMIT 50
+            """,
+            current_user['id'], bike['tracker_name']
+        )
+        
+        notes = await conn.fetch(
+            """
+            SELECT * FROM bike_notes
+            WHERE bike_id = $1
+            ORDER BY created_at DESC
+            """,
+            bike_id
+        )
+        
+        return {
+            "bike": {
+                "id": bike['id'],
+                "tracker_name": bike['tracker_name'],
+                "device_serial": bike['device_serial'],
+                "latest_alert_at": bike['latest_alert_at'].isoformat() if bike['latest_alert_at'] else None
+            },
+            "alerts": [dict(alert) for alert in alerts],
+            "notes": [dict(note) for note in notes]
+        }
+
+
+@api_router.post("/bikes/{bike_id}/notes")
+async def add_bike_note(
+    bike_id: int, 
+    request: AddBikeNoteRequest, 
+    current_user: dict = Depends(get_current_user)
+):
+    """Add a note to a bike"""
+    async with db_pool.acquire() as conn:
+        bike = await conn.fetchrow(
+            """
+            SELECT * FROM bikes
+            WHERE id = $1 AND user_id = $2
+            """,
+            bike_id, current_user['id']
+        )
+        
+        if not bike:
+            raise HTTPException(status_code=404, detail="Bike not found")
+        
+        note = await conn.fetchrow(
+            """
+            INSERT INTO bike_notes (bike_id, user_id, note, author, created_at)
+            VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+            RETURNING *
+            """,
+            bike_id, current_user['id'], request.note, current_user.get('username', 'User')
+        )
+        
+        return {"success": True, "note": dict(note)}
+
+
+@api_router.delete("/bikes/notes/{note_id}")
+async def delete_bike_note(note_id: int, current_user: dict = Depends(get_current_user)):
+    """Delete a bike note"""
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            DELETE FROM bike_notes
+            WHERE id = $1 AND user_id = $2
+            """,
+            note_id, current_user['id']
+        )
+    
+    return {"success": True}
+
+
+@api_router.get("/bikes/by-tracker/{tracker_name}")
+async def get_bike_by_tracker_name(tracker_name: str, current_user: dict = Depends(get_current_user)):
+    """Get bike ID by tracker name"""
+    async with db_pool.acquire() as conn:
+        bike = await conn.fetchrow(
+            """
+            SELECT id FROM bikes
+            WHERE user_id = $1 AND tracker_name = $2
+            """,
+            current_user['id'], tracker_name
+        )
+        
+        if not bike:
+            bike_from_alert = await conn.fetchrow(
+                """
+                SELECT DISTINCT ON (tracker_name) 
+                    tracker_name, device_serial,
+                    MAX(created_at) as latest_alert_at
+                FROM tracker_alerts
+                WHERE user_id = $1 AND tracker_name = $2
+                GROUP BY tracker_name, device_serial
+                """,
+                current_user['id'], tracker_name
+            )
+            
+            if bike_from_alert:
+                bike = await conn.fetchrow(
+                    """
+                    INSERT INTO bikes (user_id, tracker_name, device_serial, latest_alert_at)
+                    VALUES ($1, $2, $3, $4)
+                    ON CONFLICT (user_id, tracker_name) 
+                    DO UPDATE SET 
+                        latest_alert_at = EXCLUDED.latest_alert_at,
+                        device_serial = EXCLUDED.device_serial
+                    RETURNING id
+                    """,
+                    current_user['id'], bike_from_alert['tracker_name'], 
+                    bike_from_alert['device_serial'], bike_from_alert['latest_alert_at']
+                )
+        
+        if not bike:
+            raise HTTPException(status_code=404, detail="Bike not found")
+        
+        return {"bike_id": bike['id']}
 
 
 app.include_router(api_router)
