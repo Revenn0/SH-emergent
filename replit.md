@@ -39,13 +39,22 @@ The system employs a client-server architecture with a Python FastAPI backend an
     - All API routes protected via JWT dependency injection from cookies
     - Admin user auto-created on startup (username: `admin`, password: `dimension`)
     - **Security**: HttpOnly, Secure, SameSite=lax cookies protect against XSS and CSRF attacks
-- **Dashboard**: Features status cards for system health, total alerts, unread, high priority, and acknowledged alerts.
-- **Alert Grouping**: Alerts are grouped by `tracker_name` (motorcycle) with a badge system indicating the number of alerts per bike.
+- **Bikes Management System**: Complete bike tracking and history management:
+    - **Bikes List**: View all motorcycles with device serial, alert count, and latest alert time
+    - **Bike History**: Individual bike history showing all alerts and notes in chronological order (newest first)
+    - **Note Taking**: Add notes for each bike (e.g., "called client, no issues with bike")
+    - **Navigation**: Access bike history from Bikes page or by clicking bike name in alert modals
+    - **Record Action**: Quick access button in alert modals to add notes to the bike
+    - Auto-populated from tracker alerts with automatic bike record creation
+- **Dashboard**: Features status cards for system health, total alerts, high priority, and acknowledged alerts (changed "Unread" to "High Priority").
+- **Alert Grouping**: Alerts are grouped by `tracker_name` (motorcycle) with a badge system showing actual count (e.g., "5" or "99+" for 100+).
 - **Priority System**:
-    - **Super Important**: Motorcycles with 2+ different alerts (Red).
-    - **High Priority**: Critical alert types (Orange).
+    - **Crash Detected**: Heavy Impact + Over-turn + Tamper Alert combination (Highest severity - Red).
+    - **Heavy Impact**: Critical impacts (Red).
+    - **High Priority**: Other critical alert types (Orange).
     - **Normal Priority**: Standard alerts (Blue).
-- **Alert Details Modal**: Provides comprehensive alert information, including location with Google Maps link, coordinates, device serial number, and all alerts for that specific motorcycle.
+- **Alert Details Modal**: Provides comprehensive alert information, including location with Google Maps link, coordinates, device serial number, and all alerts for that specific motorcycle. Includes "Record Action" button and clickable bike name to access bike history.
+- **Timestamp Formatting**: All timestamps display in UK format (dd/mm/yyyy HH:MM) consistently across the application.
 - **Email Filtering**: Only processes emails from `alerts-no-reply@tracking-update.com` using IMAP search filters and includes automatic deduplication.
 - **Email Parsing**: Extracts `Alert Type`, `Time`, `Location`, `Coordinates`, `Device Serial Number`, `Tracker Name`, and `Account Name` using regex patterns.
 - **Email Reading System**:
@@ -56,9 +65,13 @@ The system employs a client-server architecture with a Python FastAPI backend an
 - **Alert Management**: Allows viewing, sorting, filtering, and deleting alerts (within the app only), along with features for acknowledging, updating status, adding notes, assigning, and favoriting alerts.
 - **Automatic Background Synchronization**: A background task runs every 10 minutes to fetch new emails incrementally (up to 100 emails per sync) and inserts them directly into the database.
 - **Pagination System**: SQL-based pagination with LIMIT/OFFSET for efficient data loading (default 50 items/page, max 200). Includes aggregate queries for statistics without loading full dataset.
+- **Data Ordering**: All lists display newest-first (ORDER BY created_at DESC) for alerts, notes, and bike history.
 
 ### Feature Specifications
-- **Alert Categories**: 14 predefined alert types including Heavy Impact, Light Sensor, Out Of Country, No Communication, Over-turn, Low Battery, Motion, New Positions, High Risk Area, Custom GeoFence, Rotation Stop, Temperature, Pressure, and Humidity.
+- **Alert Categories**: 15 predefined alert types including Heavy Impact, Light Sensor, Out Of Country, No Communication, Over-turn, Low Battery, Motion, New Positions, High Risk Area, Custom GeoFence, Rotation Stop, Temperature, Pressure, Humidity, and Tamper Alert.
+- **Alert Categorization Rules**:
+    - **Crash Detected**: Heavy Impact + Over-turn + Tamper Alert (Highest severity)
+    - Previous rule (Light Sensor + Over-turn = Heavy Impact) has been removed
 - **Alert Lifecycle Management**: Supports a workflow for alerts with statuses: New, In Progress, Resolved, Closed.
 
 ### System Design Choices
@@ -67,6 +80,8 @@ The system employs a client-server architecture with a Python FastAPI backend an
 - **Database Schema**:
     - `users` table: Stores user authentication and Gmail configuration (`id`, `username`, `password_hash`, `email`, `full_name`, `gmail_email`, `gmail_app_password`, `created_at`, `updated_at`).
     - `tracker_alerts` table: Stores parsed alert data (`id`, `user_id`, `email_id`, `alert_type`, `alert_time`, `location`, `latitude`, `longitude`, `device_serial`, `tracker_name`, `account_name`, `raw_body`, `created_at`, `status`, `acknowledged`, `acknowledged_at`, `acknowledged_by`, `notes`, `assigned_to`, `favorite`).
+    - `bikes` table: Stores bike records (`id`, `user_id`, `tracker_name`, `device_serial`, `latest_alert_at`, `created_at`, `updated_at`). Auto-populated from tracker alerts with unique constraint on user_id + tracker_name.
+    - `bike_notes` table: Stores notes for bikes (`id`, `bike_id`, `user_id`, `note`, `author`, `created_at`). All notes display newest-first.
     - `sync_checkpoints` table: For incremental email synchronization (per-user tracking).
     - `refresh_tokens` table: Stores hashed refresh tokens for secure session management and token revocation.
 - **Database Migration**: `migration_to_production.sql` script available in project root for migrating development data to production database with complete instructions and validation steps.
