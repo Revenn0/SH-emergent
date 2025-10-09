@@ -742,7 +742,7 @@ function Dashboard({ user, onLogout }) {
 
           <div className="bg-white rounded-lg border border-purple-200 p-4">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-gray-600">Crash detect</p>
+              <p className="text-xs text-gray-600">Heavy Impact</p>
               <Activity className="w-4 h-4 text-purple-600" />
             </div>
             <p className="text-2xl font-semibold text-purple-700">{stats.heavyImpact || 0}</p>
@@ -875,15 +875,10 @@ function Dashboard({ user, onLogout }) {
                         onClick={() => openAlertModal(group)}
                       >
                         <td className="py-3 px-4">
-                          <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium border ${getSeverityBadge(group.severity)}`}>
-                            {(group.severity === "crash-detected" || group.severity === "heavy-impact") ? "Critical" : "Active"}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
                           <div className="flex items-center space-x-3">
                             <Bike className="w-5 h-5 text-gray-700" strokeWidth={2} />
                             <span className="text-base font-bold text-gray-900">{group.device}</span>
-                            <span className="inline-flex items-center justify-center min-w-7 h-7 px-2 bg-gray-900 text-white text-sm font-bold rounded-md">
+                            <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 bg-gray-900 text-white text-xs font-medium rounded">
                               {getCountBadge(group.count)}
                             </span>
                           </div>
@@ -1320,7 +1315,7 @@ function Dashboard({ user, onLogout }) {
               Alert History
             </h3>
             <div className="space-y-4">
-              {selectedAlert.alerts.map((alert, idx) => (
+              {[...selectedAlert.alerts].sort((a, b) => new Date(b.alert_time) - new Date(a.alert_time)).map((alert, idx) => (
                 <div key={idx} className="p-5 bg-white border-2 border-gray-200 rounded-xl hover:border-gray-300 transition space-y-4">
                   
                   {/* Alert Header */}
