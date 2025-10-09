@@ -49,8 +49,8 @@ The system employs a client-server architecture with a Python FastAPI backend an
 - **Dashboard**: Features status cards for system health, total alerts, high priority, and acknowledged alerts (changed "Unread" to "High Priority").
 - **Alert Grouping**: Alerts are grouped by `tracker_name` (motorcycle) with a badge system showing actual count (e.g., "5" or "99+" for 100+).
 - **Priority System**:
-    - **Crash Detected**: Heavy Impact + Over-turn + Tamper Alert combination (Highest severity - Red).
-    - **Heavy Impact**: Critical impacts (Red).
+    - **Crash Detected**: Crash detect (Over-turn + Heavy impact) + Tamper Alert combination (Highest severity - Red).
+    - **Crash detect**: Over-turn + Heavy impact detected (Red).
     - **High Priority**: Other critical alert types (Orange).
     - **Normal Priority**: Standard alerts (Blue).
 - **Alert Details Modal**: Provides comprehensive alert information, including location with Google Maps link, coordinates, device serial number, and all alerts for that specific motorcycle. Includes "Record Action" button and clickable bike name to access bike history.
@@ -68,15 +68,19 @@ The system employs a client-server architecture with a Python FastAPI backend an
 - **Data Ordering**: All lists display newest-first (ORDER BY created_at DESC) for alerts, notes, and bike history.
 
 ### Feature Specifications
-- **Alert Categories**: 15 predefined alert types including Heavy Impact, Light Sensor, Out Of Country, No Communication, Over-turn, Low Battery, Motion, New Positions, High Risk Area, Custom GeoFence, Rotation Stop, Temperature, Pressure, Humidity, and Tamper Alert.
+- **Alert Categories**: 15 predefined alert types including Crash detect (Over-turn + Heavy impact), Light Sensor, Out Of Country, No Communication, Over-turn, Low Battery, Motion, New Positions, High Risk Area, Custom GeoFence, Rotation Stop, Temperature, Pressure, Humidity, and Tamper Alert.
 - **Alert Categorization Rules**:
-    - **Crash Detected**: Heavy Impact + Over-turn + Tamper Alert (Highest severity)
+    - **Crash Detected**: Crash detect + Over-turn + Tamper Alert (Highest severity)
+    - **Crash detect**: Replaces "Heavy Impact" - detects over-turn combined with heavy impact events
     - Previous rule (Light Sensor + Over-turn = Heavy Impact) has been removed
 - **Alert Lifecycle Management**: Supports a workflow for alerts with statuses: New, In Progress, Resolved, Closed.
 
 ### System Design Choices
-- **Backend (Port 8080)**: FastAPI with PostgreSQL, handling email parsing, alert categorization, IMAP client operations, and alert grouping logic.
+- **Backend (Port 8080)**: FastAPI with Neon PostgreSQL, handling email parsing, alert categorization, IMAP client operations, and alert grouping logic.
 - **Frontend (Port 5000)**: React SPA with Tailwind CSS and Lucide React icons, providing a responsive user interface across "Bike Tracker", "Admin Dashboard", and "Service Tracker" views. Uses local storage for session management.
+- **Database**: Neon PostgreSQL (cloud-hosted, managed database service)
+    - Connection string stored securely in `DATABASE_URL` environment variable
+    - Setup script available in `neon_database_setup.sql` for initial database configuration
 - **Database Schema**:
     - `users` table: Stores user authentication and Gmail configuration (`id`, `username`, `password_hash`, `email`, `full_name`, `gmail_email`, `gmail_app_password`, `created_at`, `updated_at`).
     - `tracker_alerts` table: Stores parsed alert data (`id`, `user_id`, `email_id`, `alert_type`, `alert_time`, `location`, `latitude`, `longitude`, `device_serial`, `tracker_name`, `account_name`, `raw_body`, `created_at`, `status`, `acknowledged`, `acknowledged_at`, `acknowledged_by`, `notes`, `assigned_to`, `favorite`).
@@ -89,9 +93,17 @@ The system employs a client-server architecture with a Python FastAPI backend an
 
 ## External Dependencies
 - **Email Service**: Gmail IMAP (for `alerts-no-reply@tracking-update.com`)
-- **Database**: PostgreSQL
+- **Database**: Neon PostgreSQL (cloud-hosted managed database)
 - **AI**: Google Gemini (for alert categorization, optional)
 - **Mapping**: Google Maps (for displaying alert locations)
 - **Frontend Framework**: React
 - **Styling**: Tailwind CSS
 - **Icons**: Lucide React icons
+
+## Database Setup
+To set up the Neon PostgreSQL database:
+1. Create a Neon account and database at https://neon.tech
+2. Copy the connection string provided by Neon
+3. Add the connection string as `DATABASE_URL` in Replit Secrets
+4. Run the SQL script in `neon_database_setup.sql` in the Neon SQL Editor to create all required tables and indexes
+5. The application will automatically connect to Neon on startup and create the default admin user (username: `admin`, password: `dimension`)

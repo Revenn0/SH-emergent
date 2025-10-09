@@ -53,7 +53,7 @@ security = HTTPBearer()
 
 ALERT_CATEGORIES = [
     "Crash Detected",
-    "Heavy Impact",
+    "Crash detect",
     "Light Sensor",
     "Out Of Country",
     "No Communication",
@@ -332,7 +332,7 @@ def categorize_alert(alert_type: str) -> str:
     alert_lower = alert_type.lower()
     
     if "heavy impact" in alert_lower:
-        return "Heavy Impact"
+        return "Crash detect"
     elif "light sensor" in alert_lower:
         return "Light Sensor"
     elif "out of country" in alert_lower:
@@ -373,6 +373,8 @@ async def startup_db():
     database_url = os.environ.get('DATABASE_URL')
     if not database_url:
         raise RuntimeError("DATABASE_URL environment variable not set")
+    
+    database_url = database_url.strip("'\"")
     
     db_pool = await asyncpg.create_pool(database_url, min_size=2, max_size=10)
     logger.info("Database pool created")
@@ -1013,7 +1015,7 @@ async def list_alerts(
         heavy_impact_count = await conn.fetchval(
             f"""
             SELECT COUNT(*) FROM tracker_alerts 
-            {where_clause} AND alert_type LIKE '%Heavy Impact%'
+            {where_clause} AND alert_type LIKE '%Crash detect%'
             """,
             *params
         ) or 0
@@ -1035,7 +1037,7 @@ async def list_alerts(
             alert_types = set(row["alert_types"] or [])
             has_light_sensor = "Light Sensor" in alert_types
             has_over_turn = "Over-turn" in alert_types
-            has_heavy_impact = any("Heavy Impact" in str(t) for t in alert_types if t)
+            has_heavy_impact = any("Crash detect" in str(t) for t in alert_types if t)
             has_no_comm = any("No Communication" in str(t) for t in alert_types if t)
             
             if has_light_sensor and has_over_turn:

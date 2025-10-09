@@ -330,7 +330,7 @@ function Dashboard({ user, onLogout }) {
     Object.values(grouped).forEach(group => {
       const alertTypes = new Set(group.alerts.map(a => a.alert_type));
       
-      const hasHeavyImpact = Array.from(alertTypes).some(t => t && t.includes("Heavy Impact"));
+      const hasHeavyImpact = Array.from(alertTypes).some(t => t && t.includes("Crash detect"));
       const hasOverTurn = alertTypes.has("Over-turn");
       const hasTamperAlert = alertTypes.has("Tamper Alert");
       const hasNoCommunication = Array.from(alertTypes).some(t => t && t.includes("No Communication"));
@@ -702,13 +702,13 @@ function Dashboard({ user, onLogout }) {
 
           <div className="bg-white rounded-lg border border-red-200 p-4">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-gray-600">Heavy Impact</p>
+              <p className="text-xs text-gray-600">Crash detect</p>
               <AlertTriangle className="w-4 h-4 text-red-600" />
             </div>
             <p className="text-2xl font-semibold text-red-700">
               {stats.heavyImpact || 0}
             </p>
-            <p className="text-xs text-gray-500 mt-1">Light Sensor + Over-turn</p>
+            <p className="text-xs text-gray-500 mt-1">Over-turn + Heavy impact</p>
           </div>
 
           <div className="bg-white rounded-lg border border-gray-200 p-4">
@@ -742,7 +742,7 @@ function Dashboard({ user, onLogout }) {
 
           <div className="bg-white rounded-lg border border-purple-200 p-4">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-gray-600">Heavy Impact</p>
+              <p className="text-xs text-gray-600">Crash detect</p>
               <Activity className="w-4 h-4 text-purple-600" />
             </div>
             <p className="text-2xl font-semibold text-purple-700">{stats.heavyImpact || 0}</p>
@@ -896,7 +896,7 @@ function Dashboard({ user, onLogout }) {
                             "bg-blue-100 text-blue-700"
                           }`}>
                             {group.severity === "crash-detected" ? "Crash Detected" :
-                             group.severity === "heavy-impact" ? "Heavy Impact" : 
+                             group.severity === "heavy-impact" ? "Crash detect" : 
                              group.severity === "high" ? "High Priority" : "Normal"}
                           </span>
                         </td>
