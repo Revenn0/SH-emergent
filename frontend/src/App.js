@@ -1080,7 +1080,7 @@ function Dashboard({ user, onLogout }) {
     useEffect(() => {
       loadSystemStatus();
       loadSyncConfig();
-      const interval = setInterval(loadSystemStatus, 30000); // Refresh every 30s
+      const interval = setInterval(loadSystemStatusQuiet, 60000); // Silent refresh every 60s
       return () => clearInterval(interval);
     }, []);
 
@@ -1092,6 +1092,16 @@ function Dashboard({ user, onLogout }) {
         console.error("Failed to load system status:", error);
       } finally {
         setLoadingStatus(false);
+      }
+    };
+
+    const loadSystemStatusQuiet = async () => {
+      try {
+        // Silent refresh: updates data without loading spinner
+        const response = await api.get("/system/status");
+        setSystemStatus(response.data);
+      } catch (error) {
+        console.error("Failed to quiet refresh system status:", error);
       }
     };
 
@@ -1586,12 +1596,26 @@ function Dashboard({ user, onLogout }) {
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [newNote, setNewNote] = useState("");
     const [addingNote, setAddingNote] = useState(false);
+    const [isTyping, setIsTyping] = useState(false);
 
     useEffect(() => {
       if (showBikeHistory && selectedBikeId) {
         loadBikeHistory();
       }
     }, [showBikeHistory, selectedBikeId]);
+
+    // Auto-refresh bike history every 60 seconds (only if not typing)
+    useEffect(() => {
+      if (!showBikeHistory || !selectedBikeId) return;
+      
+      const interval = setInterval(() => {
+        if (!isTyping && !addingNote) {
+          loadBikeHistoryQuiet();
+        }
+      }, 60000);
+      
+      return () => clearInterval(interval);
+    }, [showBikeHistory, selectedBikeId, isTyping, addingNote]);
 
     const loadBikeHistory = async () => {
       try {
@@ -1602,6 +1626,16 @@ function Dashboard({ user, onLogout }) {
         console.error("Failed to load bike history:", error);
       } finally {
         setLoadingHistory(false);
+      }
+    };
+
+    const loadBikeHistoryQuiet = async () => {
+      try {
+        // Silent refresh: updates history without loading spinner and without clearing note field
+        const response = await api.get(`/bikes/${selectedBikeId}/history`);
+        setBikeHistory(response.data);
+      } catch (error) {
+        console.error("Failed to quiet refresh bike history:", error);
       }
     };
 
@@ -1658,6 +1692,8 @@ function Dashboard({ user, onLogout }) {
                     <textarea
                       value={newNote}
                       onChange={(e) => setNewNote(e.target.value)}
+                      onFocus={() => setIsTyping(true)}
+                      onBlur={() => setIsTyping(false)}
                       placeholder="Enter note (e.g., called client, no issues with bike)"
                       className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent outline-none resize-none"
                       rows="3"
