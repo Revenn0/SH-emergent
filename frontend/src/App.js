@@ -511,6 +511,37 @@ function Dashboard({ user, onLogout }) {
     }
   };
 
+  const handleExportCSV = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (selectedCategory && selectedCategory !== "All") {
+        params.append('category', selectedCategory);
+      }
+      
+      // Add date filters
+      const { dateFrom, dateTo } = getDateRange();
+      if (dateFrom) params.append('date_from', dateFrom);
+      if (dateTo) params.append('date_to', dateTo);
+      
+      const url = `/alerts/export?${params.toString()}`;
+      const response = await api.get(url, { responseType: 'blob' });
+      
+      // Create download link
+      const blob = new Blob([response.data], { type: 'text/csv' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `alerts_export_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error("Failed to export CSV:", error);
+      alert("Failed to export alerts");
+    }
+  };
+
   const openAlertModal = (group) => {
     setSelectedAlert(group);
     setShowModal(true);
@@ -634,6 +665,13 @@ function Dashboard({ user, onLogout }) {
               title={darkMode ? "Light mode" : "Dark mode"}
             >
               {darkMode ? <Sun className="w-5 h-5 text-gray-600" /> : <Moon className="w-5 h-5 text-gray-600" />}
+            </button>
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition text-sm"
+            >
+              <Download className="w-4 h-4" />
+              <span>Export CSV</span>
             </button>
             <button
               onClick={handleRefreshAlerts}
