@@ -500,14 +500,14 @@ function Dashboard({ user, onLogout }) {
   };
 
   const handleClearHistory = async () => {
-    if (!window.confirm("⚠️ Limpar TODO o histórico?\n\nIsto irá:\n- Deletar todos os alertas\n- Resetar checkpoint de sincronização\n- Começar do zero\n\nNão pode ser desfeito!")) return;
+    if (!window.confirm("⚠️ Clear ALL history?\n\nThis will:\n- Delete all alerts\n- Reset sync checkpoint\n- Start from scratch\n\nThis cannot be undone!")) return;
     
     try {
       await api.delete("/alerts/clear-all/history");
       await loadAlerts();
-      alert("✓ Histórico limpo com sucesso! Sistema resetado.");
+      alert("✓ History cleared successfully! System reset.");
     } catch (error) {
-      alert("Erro ao limpar histórico");
+      alert("Error clearing history");
     }
   };
 
