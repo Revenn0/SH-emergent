@@ -546,13 +546,13 @@ async def startup_db():
             logger.info("Admin user already exists")
     
     background_task = asyncio.create_task(auto_sync_background())
-    logger.info("Background sync task started (10 minute interval)")
+    logger.info("Background sync task started (5 minute interval, 30 email limit)")
 
 async def auto_sync_background():
-    """Background task to automatically sync alerts every 10 minutes for all users"""
+    """Background task to automatically sync alerts every 5 minutes for all users with 30 email limit"""
     while True:
         try:
-            await asyncio.sleep(600)
+            await asyncio.sleep(300)  # 5 minutes
             
             async with db_pool.acquire() as conn:
                 users = await conn.fetch(
@@ -561,7 +561,7 @@ async def auto_sync_background():
                 
                 for user in users:
                     try:
-                        new_count = await sync_emails_background(dict(user), limit=100)
+                        new_count = await sync_emails_background(dict(user), limit=30)
                         logger.info(f"Background sync completed for {user['username']}: {new_count} new emails processed")
                     except Exception as e:
                         logger.error(f"Background sync error for {user['username']}: {str(e)}")
@@ -1492,38 +1492,19 @@ async def get_bike_by_tracker_name(tracker_name: str, current_user: dict = Depen
 
 @api_router.get("/sync/config")
 async def get_sync_config(current_user: dict = Depends(get_current_user)):
-    """Get sync configuration for current user"""
-    async with db_pool.acquire() as conn:
-        config = await conn.fetchrow(
-            "SELECT sync_interval_minutes, email_limit_per_sync FROM users WHERE id = $1",
-            current_user['id']
-        )
-        
-        return {
-            "sync_interval_minutes": config['sync_interval_minutes'] if config else 10,
-            "email_limit_per_sync": config['email_limit_per_sync'] if config else 100
-        }
+    """Get sync configuration for current user - Fixed values: 5 min interval, 30 email limit"""
+    return {
+        "sync_interval_minutes": 5,
+        "email_limit_per_sync": 30
+    }
 
 
 @api_router.post("/sync/config")
 async def update_sync_config(request: dict, current_user: dict = Depends(get_current_user)):
-    """Update sync configuration for current user"""
-    try:
-        sync_interval = int(request.get('sync_interval_minutes', 10))
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="Sync interval must be a valid number")
-    
-    try:
-        email_limit = int(request.get('email_limit_per_sync', 100))
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="Email limit must be a valid number")
-    
-    # Validate ranges
-    if sync_interval < 1 or sync_interval > 1440:  # Max 24 hours
-        raise HTTPException(status_code=400, detail="Sync interval must be between 1 and 1440 minutes")
-    
-    if email_limit < 1 or email_limit > 200:
-        raise HTTPException(status_code=400, detail="Email limit must be between 1 and 200")
+    """Update sync configuration for current user - Fixed values: 5 min, 30 emails"""
+    # Fixed values - ignore request parameters
+    sync_interval = 5
+    email_limit = 30
     
     async with db_pool.acquire() as conn:
         await conn.execute(

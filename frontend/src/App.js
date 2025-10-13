@@ -249,16 +249,15 @@ function Dashboard({ user, onLogout }) {
   }, [page]);
 
   useEffect(() => {
-    let interval;
-    if (autoRefresh && gmailConnected) {
-      interval = setInterval(() => {
-        loadAlerts(selectedCategory !== "All" ? selectedCategory : null);
-      }, 30000);
-    }
+    // Auto-refresh alerts every 10 seconds (always active)
+    const interval = setInterval(() => {
+      loadAlerts(selectedCategory !== "All" ? selectedCategory : null, page);
+    }, 10000);
+    
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [autoRefresh, gmailConnected, selectedCategory]);
+  }, [selectedCategory, page]);
 
   useEffect(() => {
     if (alerts.length > 0) {
@@ -1210,10 +1209,11 @@ function Dashboard({ user, onLogout }) {
             <input
               type="number"
               value={syncInterval}
-              onChange={(e) => setSyncInterval(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none text-sm"
+              disabled
+              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600 cursor-not-allowed text-sm"
               min="1"
             />
+            <p className="text-xs text-gray-500 mt-1">Fixed at 5 minutes for optimal performance</p>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1.5">
@@ -1222,27 +1222,13 @@ function Dashboard({ user, onLogout }) {
             <input
               type="number"
               value={emailLimit}
-              onChange={(e) => setEmailLimit(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none text-sm"
+              disabled
+              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600 cursor-not-allowed text-sm"
               min="1"
               max="200"
             />
+            <p className="text-xs text-gray-500 mt-1">Fixed at 30 emails per sync</p>
           </div>
-        </div>
-        <div className="flex items-center gap-3 mt-4">
-          <button 
-            onClick={handleSaveSyncConfig}
-            disabled={savingConfig}
-            className={`px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition text-sm ${savingConfig ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            {savingConfig ? 'Saving...' : 'Save Configuration'}
-          </button>
-          {showSaveSuccess && (
-            <div className="flex items-center gap-2 text-green-600 text-sm">
-              <CheckCircle className="w-4 h-4" />
-              <span>Configuration saved successfully!</span>
-            </div>
-          )}
         </div>
       </div>
 
