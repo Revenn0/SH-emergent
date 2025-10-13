@@ -221,6 +221,7 @@ function Dashboard({ user, onLogout }) {
 
   const [bikes, setBikes] = useState([]);
   const [loadingBikes, setLoadingBikes] = useState(false);
+  const [bikeSearchQuery, setBikeSearchQuery] = useState("");
   const [selectedBikeId, setSelectedBikeId] = useState(null);
   const [showBikeHistory, setShowBikeHistory] = useState(false);
 
@@ -404,6 +405,11 @@ function Dashboard({ user, onLogout }) {
       }
       grouped[device].alerts.push(alert);
       grouped[device].count++;
+      
+      // Update latestAlert to the most recent one
+      if (new Date(alert.alert_time) > new Date(grouped[device].latestAlert.alert_time)) {
+        grouped[device].latestAlert = alert;
+      }
     });
 
     Object.values(grouped).forEach(group => {
@@ -677,6 +683,12 @@ function Dashboard({ user, onLogout }) {
       );
     }
 
+    const filteredBikes = bikes.filter(bike => 
+      !bikeSearchQuery || 
+      bike.tracker_name.toLowerCase().includes(bikeSearchQuery.toLowerCase()) ||
+      (bike.device_serial && bike.device_serial.toLowerCase().includes(bikeSearchQuery.toLowerCase()))
+    );
+
     return (
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
@@ -686,14 +698,33 @@ function Dashboard({ user, onLogout }) {
           </div>
         </div>
 
-        {bikes.length === 0 ? (
+        {bikes.length > 0 && (
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by bike name or serial..."
+                value={bikeSearchQuery}
+                onChange={(e) => setBikeSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              />
+            </div>
+          </div>
+        )}
+
+        {filteredBikes.length === 0 ? (
           <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
             <Bike className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">No bikes found. Bikes will appear here once you have tracker alerts.</p>
+            <p className="text-gray-600">
+              {bikes.length === 0 
+                ? "No bikes found. Bikes will appear here once you have tracker alerts."
+                : "No bikes match your search."}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {bikes.map((bike) => (
+            {filteredBikes.map((bike) => (
               <div
                 key={bike.id}
                 onClick={() => openBikeHistory(bike.id)}
