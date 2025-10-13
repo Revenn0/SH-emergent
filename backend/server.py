@@ -1401,60 +1401,57 @@ async def toggle_favorite(alert_id: int, current_user: dict = Depends(get_curren
 
 @api_router.get("/bikes/list")
 async def list_bikes(current_user: dict = Depends(get_current_user)):
-    """Get all bikes for the current user with alert counts"""
+    """Get all bikes for the current user with alert counts - OPTIMIZED & SECURE"""
     async with db_pool.acquire() as conn:
+        # Single optimized query with proper user_id scoping
         bikes = await conn.fetch(
             """
-            SELECT DISTINCT ON (tracker_name) 
-                tracker_name, device_serial,
-                MAX(created_at) as latest_alert_at
-            FROM tracker_alerts
-            WHERE user_id = $1
-            GROUP BY tracker_name, device_serial
-            ORDER BY tracker_name, MAX(created_at) DESC
+            WITH bike_data AS (
+                SELECT 
+                    user_id,
+                    tracker_name,
+                    device_serial,
+                    MAX(created_at) as latest_alert_at,
+                    COUNT(*) as alert_count
+                FROM tracker_alerts
+                WHERE user_id = $1
+                GROUP BY user_id, tracker_name, device_serial
+            ),
+            bike_ids AS (
+                INSERT INTO bikes (user_id, tracker_name, device_serial, latest_alert_at)
+                SELECT user_id, tracker_name, device_serial, latest_alert_at FROM bike_data
+                ON CONFLICT (user_id, tracker_name) 
+                DO UPDATE SET 
+                    latest_alert_at = EXCLUDED.latest_alert_at,
+                    device_serial = EXCLUDED.device_serial
+                RETURNING id, user_id, tracker_name
+            )
+            SELECT 
+                bi.id,
+                bd.tracker_name,
+                bd.device_serial,
+                bd.latest_alert_at,
+                bd.alert_count,
+                COALESCE(COUNT(bn.id), 0) as notes_count
+            FROM bike_data bd
+            JOIN bike_ids bi ON bi.user_id = bd.user_id AND bi.tracker_name = bd.tracker_name
+            LEFT JOIN bike_notes bn ON bn.bike_id = bi.id
+            WHERE bd.user_id = $1
+            GROUP BY bi.id, bd.tracker_name, bd.device_serial, bd.latest_alert_at, bd.alert_count
+            ORDER BY bd.latest_alert_at DESC
             """,
             current_user['id']
         )
         
         result = []
-        for bike_row in bikes:
-            bike_id_row = await conn.fetchrow(
-                """
-                INSERT INTO bikes (user_id, tracker_name, device_serial, latest_alert_at)
-                VALUES ($1, $2, $3, $4)
-                ON CONFLICT (user_id, tracker_name) 
-                DO UPDATE SET 
-                    latest_alert_at = EXCLUDED.latest_alert_at,
-                    device_serial = EXCLUDED.device_serial
-                RETURNING id
-                """,
-                current_user['id'], bike_row['tracker_name'], 
-                bike_row['device_serial'], bike_row['latest_alert_at']
-            )
-            
-            alert_count = await conn.fetchval(
-                """
-                SELECT COUNT(*) FROM tracker_alerts
-                WHERE user_id = $1 AND tracker_name = $2
-                """,
-                current_user['id'], bike_row['tracker_name']
-            )
-            
-            notes_count = await conn.fetchval(
-                """
-                SELECT COUNT(*) FROM bike_notes
-                WHERE bike_id = $1
-                """,
-                bike_id_row['id']
-            )
-            
+        for bike in bikes:
             result.append({
-                "id": bike_id_row['id'],
-                "tracker_name": bike_row['tracker_name'],
-                "device_serial": bike_row['device_serial'],
-                "latest_alert_at": bike_row['latest_alert_at'].isoformat() if bike_row['latest_alert_at'] else None,
-                "alert_count": alert_count,
-                "notes_count": notes_count
+                "id": bike['id'],
+                "tracker_name": bike['tracker_name'],
+                "device_serial": bike['device_serial'],
+                "latest_alert_at": bike['latest_alert_at'].isoformat() if bike['latest_alert_at'] else None,
+                "alert_count": bike['alert_count'],
+                "notes_count": bike['notes_count']
             })
         
         return {"bikes": result}

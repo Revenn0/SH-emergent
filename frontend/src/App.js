@@ -960,7 +960,6 @@ function Dashboard({ user, onLogout }) {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-600">Status</th>
                     <th className="text-left py-3 px-4 text-xs font-medium text-gray-600">Device</th>
                     <th className="text-left py-3 px-4 text-xs font-medium text-gray-600">Type</th>
                     <th className="text-left py-3 px-4 text-xs font-medium text-gray-600">Category</th>
@@ -974,7 +973,7 @@ function Dashboard({ user, onLogout }) {
                     !searchQuery || group.device.toLowerCase().includes(searchQuery.toLowerCase())
                   ).length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="text-center py-12 text-sm text-gray-500">
+                      <td colSpan="6" className="text-center py-12 text-sm text-gray-500">
                         {searchQuery ? `No alerts found for "${searchQuery}"` : "No alerts available"}
                       </td>
                     </tr>
