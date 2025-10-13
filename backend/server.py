@@ -511,6 +511,18 @@ async def startup_db():
             """
         )
         
+        # Add sync configuration columns if they don't exist
+        try:
+            await conn.execute(
+                """
+                ALTER TABLE users 
+                ADD COLUMN IF NOT EXISTS sync_interval_minutes INTEGER DEFAULT 10,
+                ADD COLUMN IF NOT EXISTS email_limit_per_sync INTEGER DEFAULT 100
+                """
+            )
+        except Exception as e:
+            logger.warning(f"Error adding sync config columns (may already exist): {str(e)}")
+        
         admin_exists = await conn.fetchval(
             "SELECT COUNT(*) FROM users WHERE username = 'admin'"
         )
@@ -1414,6 +1426,56 @@ async def get_bike_by_tracker_name(tracker_name: str, current_user: dict = Depen
             raise HTTPException(status_code=404, detail="Bike not found")
         
         return {"bike_id": bike['id']}
+
+
+@api_router.get("/sync/config")
+async def get_sync_config(current_user: dict = Depends(get_current_user)):
+    """Get sync configuration for current user"""
+    async with db_pool.acquire() as conn:
+        config = await conn.fetchrow(
+            "SELECT sync_interval_minutes, email_limit_per_sync FROM users WHERE id = $1",
+            current_user['id']
+        )
+        
+        return {
+            "sync_interval_minutes": config['sync_interval_minutes'] if config else 10,
+            "email_limit_per_sync": config['email_limit_per_sync'] if config else 100
+        }
+
+
+@api_router.post("/sync/config")
+async def update_sync_config(request: dict, current_user: dict = Depends(get_current_user)):
+    """Update sync configuration for current user"""
+    try:
+        sync_interval = int(request.get('sync_interval_minutes', 10))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Sync interval must be a valid number")
+    
+    try:
+        email_limit = int(request.get('email_limit_per_sync', 100))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Email limit must be a valid number")
+    
+    # Validate ranges
+    if sync_interval < 1 or sync_interval > 1440:  # Max 24 hours
+        raise HTTPException(status_code=400, detail="Sync interval must be between 1 and 1440 minutes")
+    
+    if email_limit < 1 or email_limit > 200:
+        raise HTTPException(status_code=400, detail="Email limit must be between 1 and 200")
+    
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE users 
+            SET sync_interval_minutes = $1, 
+                email_limit_per_sync = $2,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $3
+            """,
+            sync_interval, email_limit, current_user['id']
+        )
+    
+    return {"success": True, "message": "Sync configuration updated successfully"}
 
 
 @api_router.get("/system/status")

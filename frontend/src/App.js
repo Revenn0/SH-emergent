@@ -1008,9 +1008,13 @@ function Dashboard({ user, onLogout }) {
   const AdminPage = () => {
     const [systemStatus, setSystemStatus] = useState(null);
     const [loadingStatus, setLoadingStatus] = useState(true);
+    const [syncConfig, setSyncConfig] = useState({ sync_interval_minutes: 10, email_limit_per_sync: 100 });
+    const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+    const [savingConfig, setSavingConfig] = useState(false);
 
     useEffect(() => {
       loadSystemStatus();
+      loadSyncConfig();
       const interval = setInterval(loadSystemStatus, 30000); // Refresh every 30s
       return () => clearInterval(interval);
     }, []);
@@ -1023,6 +1027,48 @@ function Dashboard({ user, onLogout }) {
         console.error("Failed to load system status:", error);
       } finally {
         setLoadingStatus(false);
+      }
+    };
+
+    const loadSyncConfig = async () => {
+      try {
+        const response = await api.get("/sync/config");
+        setSyncConfig(response.data);
+        setSyncInterval(response.data.sync_interval_minutes);
+        setEmailLimit(response.data.email_limit_per_sync);
+      } catch (error) {
+        console.error("Failed to load sync config:", error);
+      }
+    };
+
+    const handleSaveSyncConfig = async () => {
+      const intervalValue = parseInt(syncInterval);
+      const limitValue = parseInt(emailLimit);
+
+      if (!intervalValue || intervalValue < 1 || intervalValue > 1440) {
+        alert("Sync interval must be between 1 and 1440 minutes");
+        return;
+      }
+
+      if (!limitValue || limitValue < 1 || limitValue > 200) {
+        alert("Email limit must be between 1 and 200");
+        return;
+      }
+
+      setSavingConfig(true);
+      try {
+        await api.post("/sync/config", {
+          sync_interval_minutes: intervalValue,
+          email_limit_per_sync: limitValue
+        });
+        setShowSaveSuccess(true);
+        setTimeout(() => setShowSaveSuccess(false), 3000);
+      } catch (error) {
+        console.error("Failed to save sync config:", error);
+        const errorMsg = error.response?.data?.detail || "Failed to save configuration. Please try again.";
+        alert(errorMsg);
+      } finally {
+        setSavingConfig(false);
       }
     };
 
@@ -1183,9 +1229,21 @@ function Dashboard({ user, onLogout }) {
             />
           </div>
         </div>
-        <button className="mt-4 px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition text-sm">
-          Save Configuration
-        </button>
+        <div className="flex items-center gap-3 mt-4">
+          <button 
+            onClick={handleSaveSyncConfig}
+            disabled={savingConfig}
+            className={`px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition text-sm ${savingConfig ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            {savingConfig ? 'Saving...' : 'Save Configuration'}
+          </button>
+          {showSaveSuccess && (
+            <div className="flex items-center gap-2 text-green-600 text-sm">
+              <CheckCircle className="w-4 h-4" />
+              <span>Configuration saved successfully!</span>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-lg border border-red-200 p-6">
