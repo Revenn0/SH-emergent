@@ -207,10 +207,12 @@ function Dashboard({ user, onLogout }) {
   const [sortBy, setSortBy] = useState("priority");
   
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(50);
+  const [limit, setLimit] = useState(20); // Reduced for lazy loading
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [pagination, setPagination] = useState({
     page: 1,
-    limit: 50,
+    limit: 20,
     total: 0,
     total_pages: 0,
     has_next: false,
@@ -232,26 +234,22 @@ function Dashboard({ user, onLogout }) {
   }, []);
 
   useEffect(() => {
+    // Reset to page 1 and reload when category changes
     setPage(1);
     if (selectedCategory !== "All") {
-      loadAlerts(selectedCategory, 1);
+      loadAlerts(selectedCategory, 1, false);
     } else {
-      loadAlerts(null, 1);
+      loadAlerts(null, 1, false);
     }
   }, [selectedCategory]);
-  
-  useEffect(() => {
-    if (selectedCategory !== "All") {
-      loadAlerts(selectedCategory, page);
-    } else {
-      loadAlerts(null, page);
-    }
-  }, [page]);
 
   useEffect(() => {
-    // Auto-refresh alerts every 10 seconds (always active)
+    // Auto-refresh alerts every 10 seconds (only when on page 1 to avoid disrupting lazy loading)
     const interval = setInterval(() => {
-      loadAlerts(selectedCategory !== "All" ? selectedCategory : null, page);
+      // Only auto-refresh if user is on page 1 (haven't loaded more)
+      if (page === 1) {
+        loadAlerts(selectedCategory !== "All" ? selectedCategory : null, 1, false);
+      }
     }, 10000);
     
     return () => {
@@ -275,8 +273,12 @@ function Dashboard({ user, onLogout }) {
   };
 
 
-  const loadAlerts = async (category = null, pageNum = page) => {
+  const loadAlerts = async (category = null, pageNum = page, append = false) => {
     try {
+      if (!append) {
+        setLoading(true);
+      }
+      
       const params = new URLSearchParams();
       if (category && category !== "All") {
         params.append('category', category);
@@ -287,10 +289,17 @@ function Dashboard({ user, onLogout }) {
       const url = `/alerts/list?${params.toString()}`;
       
       const response = await api.get(url);
-      setAlerts(response.data.alerts);
+      
+      if (append) {
+        setAlerts(prev => [...prev, ...response.data.alerts]);
+      } else {
+        setAlerts(response.data.alerts);
+      }
+      
       setStats(response.data.stats);
       setGmailConnected(response.data.connected);
       setGmailEmail(response.data.email || "");
+      setHasMore(response.data.pagination?.has_next || false);
       setPagination(response.data.pagination || {
         page: pageNum,
         limit: limit,
@@ -300,11 +309,35 @@ function Dashboard({ user, onLogout }) {
         has_prev: false
       });
       
-      groupAlertsByDevice(response.data.alerts);
+      if (!append) {
+        groupAlertsByDevice(response.data.alerts);
+      } else {
+        // Re-group with all alerts when appending
+        groupAlertsByDevice([...alerts, ...response.data.alerts]);
+      }
+      
+      return true; // Success indicator
     } catch (error) {
       console.error("Failed to load alerts:", error);
+      return false; // Failure indicator
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+  
+  const loadMoreAlerts = async () => {
+    if (hasMore && !loadingMore) {
+      setLoadingMore(true);
+      const nextPage = page + 1;
+      // Manually track page without triggering effects
+      const success = await loadAlerts(selectedCategory !== "All" ? selectedCategory : null, nextPage, true);
+      // Only update page state after successful load to track position
+      if (success) {
+        setPage(nextPage);
+      } else {
+        setLoadingMore(false); // Reset loading state on failure
+      }
     }
   };
 
@@ -379,7 +412,9 @@ function Dashboard({ user, onLogout }) {
   const handleRefreshAlerts = async () => {
     setSyncing(true);
     try {
-      await loadAlerts(selectedCategory !== "All" ? selectedCategory : null, page);
+      // Always refresh from page 1 to reset lazy loading state
+      setPage(1);
+      await loadAlerts(selectedCategory !== "All" ? selectedCategory : null, 1, false);
     } catch (error) {
       console.error("Failed to refresh alerts:", error);
     } finally {
@@ -928,73 +963,37 @@ function Dashboard({ user, onLogout }) {
               </table>
             </div>
             
-            {pagination.total_pages > 1 && (
-              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-                <div className="flex items-center space-x-2 text-sm text-gray-600">
+            {/* Lazy loading: Load More button */}
+            {hasMore && (
+              <div className="px-6 py-4 border-t border-gray-200 flex flex-col items-center gap-3">
+                <div className="text-sm text-gray-600">
                   <span>
-                    Showing <span className="font-medium">{((page - 1) * limit) + 1}</span> to{' '}
-                    <span className="font-medium">
-                      {Math.min(page * limit, pagination.total)}
-                    </span> of{' '}
+                    Showing <span className="font-medium">{alerts.length}</span> of{' '}
                     <span className="font-medium">{pagination.total}</span> alerts
                   </span>
                 </div>
                 
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => setPage(p => p - 1)}
-                    disabled={!pagination.has_prev}
-                    className={`px-3 py-1.5 rounded text-sm font-medium transition ${
-                      pagination.has_prev
-                        ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        : 'bg-gray-50 text-gray-400 cursor-not-allowed'
-                    }`}
-                  >
-                    Previous
-                  </button>
-                  
-                  <div className="flex items-center space-x-1">
-                    {[...Array(pagination.total_pages)].map((_, i) => {
-                      const pageNum = i + 1;
-                      if (
-                        pageNum === 1 ||
-                        pageNum === pagination.total_pages ||
-                        (pageNum >= page - 1 && pageNum <= page + 1)
-                      ) {
-                        return (
-                          <button
-                            key={pageNum}
-                            onClick={() => setPage(pageNum)}
-                            className={`px-3 py-1.5 rounded text-sm font-medium transition ${
-                              page === pageNum
-                                ? 'bg-gray-900 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                          >
-                            {pageNum}
-                          </button>
-                        );
-                      } else if (
-                        pageNum === page - 2 ||
-                        pageNum === page + 2
-                      ) {
-                        return <span key={pageNum} className="px-2 text-gray-400">...</span>;
-                      }
-                      return null;
-                    })}
-                  </div>
-                  
-                  <button
-                    onClick={() => setPage(p => p + 1)}
-                    disabled={!pagination.has_next}
-                    className={`px-3 py-1.5 rounded text-sm font-medium transition ${
-                      pagination.has_next
-                        ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        : 'bg-gray-50 text-gray-400 cursor-not-allowed'
-                    }`}
-                  >
-                    Next
-                  </button>
+                <button
+                  onClick={loadMoreAlerts}
+                  disabled={loadingMore}
+                  className={`px-6 py-2.5 rounded-md text-sm font-medium transition ${
+                    loadingMore
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-gray-900 text-white hover:bg-gray-800'
+                  }`}
+                >
+                  {loadingMore ? 'Loading...' : 'Load More Alerts'}
+                </button>
+              </div>
+            )}
+            
+            {/* Show total when no more to load */}
+            {!hasMore && alerts.length > 0 && (
+              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-center">
+                <div className="text-sm text-gray-600">
+                  <span>
+                    Showing all <span className="font-medium">{alerts.length}</span> alerts
+                  </span>
                 </div>
               </div>
             )}

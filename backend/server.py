@@ -376,7 +376,13 @@ async def startup_db():
     
     database_url = database_url.strip("'\"")
     
-    db_pool = await asyncpg.create_pool(database_url, min_size=2, max_size=10)
+    # Disable statement caching to avoid InvalidCachedStatementError with Neon
+    db_pool = await asyncpg.create_pool(
+        database_url, 
+        min_size=2, 
+        max_size=10,
+        statement_cache_size=0  # Disable statement caching
+    )
     logger.info("Database pool created")
     
     async with db_pool.acquire() as conn:
