@@ -70,13 +70,16 @@ The system employs a client-server architecture with a Python FastAPI backend an
     - **Login Synchronization**: User login only synchronizes with the already-updated database
     - Simple, reliable architecture with automatic background processing
 - **Alert Management**: Allows viewing, sorting, filtering, and deleting alerts (within the app only), along with features for acknowledging, updating status, adding notes, assigning, and favoriting alerts. Actions column removed for cleaner UI.
-- **Automatic Background Synchronization**: A background task runs every 10 minutes to fetch new emails incrementally (up to 100 emails per sync) and inserts them directly into the database.
+- **Automatic Background Synchronization**: A background task runs every 5 minutes to fetch new emails incrementally (up to 30 emails per sync) and inserts them directly into the database.
 - **Silent Auto-Refresh System**: 
-    - Alerts table and stats refresh automatically every 10 seconds without user interaction
-    - Uses `loadAlertsQuiet()` function that fetches data without showing loading spinner (prevents UI flickering)
+    - **Bike Tracker Page**: Alerts table and stats refresh automatically every 60 seconds without user interaction
+    - **Admin Dashboard**: System status refreshes automatically every 60 seconds without loading spinner
+    - **Bike History Modal**: History refreshes every 60 seconds, but pauses when user is typing notes (onFocus/onBlur detection)
+    - Uses `loadAlertsQuiet()` and `loadSystemStatusQuiet()` functions that fetch data without showing loading spinner (prevents UI flickering)
     - Automatically resets pagination to page 1 to maintain consistency
     - Stats-only endpoint (`/api/alerts/stats-only`) available for lightweight updates when needed
     - Manual "Refresh Alerts" button still available for user-initiated refresh with loading feedback
+    - All refreshes happen in background without interrupting user navigation or data entry
 - **Bikes Page Performance**: Highly optimized for instant loading:
     - Single CTE query instead of N+3 queries (99%+ reduction for large datasets)
     - Bulk upsert of bike records with proper user_id scoping
