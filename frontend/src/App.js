@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import "@/App.css";
 import axios from "axios";
 import { 
@@ -206,6 +206,11 @@ function Dashboard({ user, onLogout }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("priority");
   
+  // Date filter states
+  const [dateFilter, setDateFilter] = useState("all"); // "all", "today", "week", "month", "custom"
+  const [customDateFrom, setCustomDateFrom] = useState("");
+  const [customDateTo, setCustomDateTo] = useState("");
+  
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20); // Reduced for lazy loading
   const [hasMore, setHasMore] = useState(false);
@@ -224,6 +229,9 @@ function Dashboard({ user, onLogout }) {
   const [bikeSearchQuery, setBikeSearchQuery] = useState("");
   const [selectedBikeId, setSelectedBikeId] = useState(null);
   const [showBikeHistory, setShowBikeHistory] = useState(false);
+  
+  // Ref for infinite scroll observer
+  const loadMoreRef = useRef(null);
 
   useEffect(() => {
     loadAlerts();
@@ -262,6 +270,77 @@ function Dashboard({ user, onLogout }) {
     }
   }, [sortBy]);
 
+  // Reload alerts when date filter changes
+  useEffect(() => {
+    setPage(1);
+    loadAlerts(selectedCategory !== "All" ? selectedCategory : null, 1, false);
+  }, [dateFilter, customDateFrom, customDateTo]);
+
+  // Infinite scroll: observe sentinel element
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first.isIntersecting && hasMore && !loadingMore) {
+          loadMoreAlerts();
+        }
+      },
+      { threshold: 0.1 } // Trigger when 10% visible
+    );
+
+    const currentRef = loadMoreRef.current;
+    if (currentRef) {
+      observer.observe(currentRef);
+    }
+
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef);
+      }
+    };
+  }, [hasMore, loadingMore]); // Re-run when these change
+
+  // Calculate date range based on filter
+  const getDateRange = () => {
+    const now = new Date();
+    let dateFrom = null;
+    let dateTo = null;
+
+    switch (dateFilter) {
+      case "today":
+        dateFrom = new Date(now.setHours(0, 0, 0, 0)).toISOString();
+        dateTo = new Date(now.setHours(23, 59, 59, 999)).toISOString();
+        break;
+      case "week":
+        const weekAgo = new Date(now);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        dateFrom = weekAgo.toISOString();
+        dateTo = new Date().toISOString();
+        break;
+      case "month":
+        const monthAgo = new Date(now);
+        monthAgo.setMonth(monthAgo.getMonth() - 1);
+        dateFrom = monthAgo.toISOString();
+        dateTo = new Date().toISOString();
+        break;
+      case "custom":
+        if (customDateFrom) dateFrom = new Date(customDateFrom).toISOString();
+        if (customDateTo) {
+          const endDate = new Date(customDateTo);
+          endDate.setHours(23, 59, 59, 999);
+          dateTo = endDate.toISOString();
+        }
+        break;
+      case "all":
+      default:
+        dateFrom = null;
+        dateTo = null;
+        break;
+    }
+
+    return { dateFrom, dateTo };
+  };
+
   const loadCategories = async () => {
     try {
       const response = await api.get("/alerts/categories");
@@ -296,6 +375,11 @@ function Dashboard({ user, onLogout }) {
       }
       params.append('page', 1);
       params.append('limit', limit);
+      
+      // Add date filters
+      const { dateFrom, dateTo } = getDateRange();
+      if (dateFrom) params.append('date_from', dateFrom);
+      if (dateTo) params.append('date_to', dateTo);
       
       const url = `/alerts/list?${params.toString()}`;
       const response = await api.get(url);
@@ -333,6 +417,11 @@ function Dashboard({ user, onLogout }) {
       }
       params.append('page', pageNum);
       params.append('limit', limit);
+      
+      // Add date filters
+      const { dateFrom, dateTo } = getDateRange();
+      if (dateFrom) params.append('date_from', dateFrom);
+      if (dateTo) params.append('date_to', dateTo);
       
       const url = `/alerts/list?${params.toString()}`;
       
@@ -897,6 +986,58 @@ function Dashboard({ user, onLogout }) {
                   )}
                 </div>
                 <div className="flex items-center space-x-2">
+                  <label className="text-xs font-medium text-gray-600">Date:</label>
+                  <div className="flex items-center space-x-1">
+                    <button
+                      onClick={() => setDateFilter("all")}
+                      className={`px-2 py-1 text-xs rounded ${dateFilter === "all" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                    >
+                      All
+                    </button>
+                    <button
+                      onClick={() => setDateFilter("today")}
+                      className={`px-2 py-1 text-xs rounded ${dateFilter === "today" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                    >
+                      Today
+                    </button>
+                    <button
+                      onClick={() => setDateFilter("week")}
+                      className={`px-2 py-1 text-xs rounded ${dateFilter === "week" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                    >
+                      Week
+                    </button>
+                    <button
+                      onClick={() => setDateFilter("month")}
+                      className={`px-2 py-1 text-xs rounded ${dateFilter === "month" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                    >
+                      Month
+                    </button>
+                    <button
+                      onClick={() => setDateFilter("custom")}
+                      className={`px-2 py-1 text-xs rounded ${dateFilter === "custom" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                    >
+                      Custom
+                    </button>
+                  </div>
+                  {dateFilter === "custom" && (
+                    <div className="flex items-center space-x-1">
+                      <input
+                        type="date"
+                        value={customDateFrom}
+                        onChange={(e) => setCustomDateFrom(e.target.value)}
+                        className="px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
+                      />
+                      <span className="text-xs text-gray-500">to</span>
+                      <input
+                        type="date"
+                        value={customDateTo}
+                        onChange={(e) => setCustomDateTo(e.target.value)}
+                        className="px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center space-x-2">
                   <label className="text-xs font-medium text-gray-600">Search Plate:</label>
                   <div className="relative">
                     <Search className="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 transform -translate-y-1/2" />
@@ -1030,27 +1171,27 @@ function Dashboard({ user, onLogout }) {
               </table>
             </div>
             
-            {/* Lazy loading: Load More button */}
+            {/* Infinite scroll: sentinel element for auto-loading */}
             {hasMore && (
-              <div className="px-6 py-4 border-t border-gray-200 flex flex-col items-center gap-3">
-                <div className="text-sm text-gray-600">
+              <div className="px-6 py-4 border-t border-gray-200">
+                <div className="text-sm text-gray-600 text-center mb-3">
                   <span>
                     Showing <span className="font-medium">{alerts.length}</span> of{' '}
                     <span className="font-medium">{pagination.total}</span> alerts
                   </span>
                 </div>
-                
-                <button
-                  onClick={loadMoreAlerts}
-                  disabled={loadingMore}
-                  className={`px-6 py-2.5 rounded-md text-sm font-medium transition ${
-                    loadingMore
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-gray-900 text-white hover:bg-gray-800'
-                  }`}
-                >
-                  {loadingMore ? 'Loading...' : 'Load More Alerts'}
-                </button>
+                {/* Sentinel element - triggers loading when visible */}
+                <div ref={loadMoreRef} className="h-4 flex items-center justify-center">
+                  {loadingMore && (
+                    <div className="flex items-center space-x-2 text-gray-500">
+                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span className="text-xs">Loading more...</span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
             
