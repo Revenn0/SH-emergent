@@ -245,9 +245,9 @@ function Dashboard({ user, onLogout }) {
   }, [selectedCategory]);
 
   useEffect(() => {
-    // Auto-refresh only statistics every 10 seconds (doesn't reload alert list, prevents flickering)
+    // Auto-refresh alerts and statistics every 10 seconds (silent, no loading spinner)
     const interval = setInterval(() => {
-      loadStatsOnly(selectedCategory !== "All" ? selectedCategory : null);
+      loadAlertsQuiet(selectedCategory !== "All" ? selectedCategory : null);
     }, 10000);
     
     return () => {
@@ -283,6 +283,40 @@ function Dashboard({ user, onLogout }) {
       setStats(response.data.stats);
     } catch (error) {
       console.error("Failed to load stats:", error);
+    }
+  };
+
+  const loadAlertsQuiet = async (category = null) => {
+    try {
+      // Silent refresh: updates alerts without showing loading spinner
+      const params = new URLSearchParams();
+      if (category && category !== "All") {
+        params.append('category', category);
+      }
+      params.append('page', 1);
+      params.append('limit', limit);
+      
+      const url = `/alerts/list?${params.toString()}`;
+      const response = await api.get(url);
+      
+      setAlerts(response.data.alerts);
+      setStats(response.data.stats);
+      setGmailConnected(response.data.connected);
+      setGmailEmail(response.data.email || "");
+      setHasMore(response.data.pagination?.has_next || false);
+      setPagination(response.data.pagination || {
+        page: 1,
+        limit: limit,
+        total: 0,
+        total_pages: 0,
+        has_next: false,
+        has_prev: false
+      });
+      setPage(1); // Reset page to 1 to keep pagination state consistent
+      
+      groupAlertsByDevice(response.data.alerts);
+    } catch (error) {
+      console.error("Failed to quiet refresh alerts:", error);
     }
   };
 
