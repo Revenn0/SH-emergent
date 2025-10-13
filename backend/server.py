@@ -1416,6 +1416,54 @@ async def get_bike_by_tracker_name(tracker_name: str, current_user: dict = Depen
         return {"bike_id": bike['id']}
 
 
+@api_router.get("/system/status")
+async def get_system_status(current_user: dict = Depends(get_current_user)):
+    """Get system status information"""
+    try:
+        async with db_pool.acquire() as conn:
+            # Check database connection
+            db_connected = True
+            
+            # Check Gmail connection
+            gmail_connected = bool(current_user and current_user.get('gmail_email') and current_user.get('gmail_app_password'))
+            
+            # Get last sync info
+            sync_checkpoint = await conn.fetchrow(
+                "SELECT last_email_id, last_sync_at FROM sync_checkpoints WHERE user_id = $1",
+                current_user['id']
+            )
+            
+            last_sync_at = str(sync_checkpoint['last_sync_at']) if sync_checkpoint and sync_checkpoint['last_sync_at'] else None
+            last_email_id = sync_checkpoint['last_email_id'] if sync_checkpoint else None
+            
+            # Get total alerts count
+            total_alerts = await conn.fetchval(
+                "SELECT COUNT(*) FROM tracker_alerts WHERE user_id = $1",
+                current_user['id']
+            ) or 0
+            
+            return {
+                "database_connected": db_connected,
+                "gmail_connected": gmail_connected,
+                "gmail_email": current_user.get('gmail_email') if gmail_connected else None,
+                "last_sync_at": last_sync_at,
+                "last_email_id": last_email_id,
+                "total_alerts": total_alerts,
+                "system_healthy": db_connected and gmail_connected
+            }
+    except Exception as e:
+        logger.error(f"Error getting system status: {str(e)}")
+        return {
+            "database_connected": False,
+            "gmail_connected": False,
+            "gmail_email": None,
+            "last_sync_at": None,
+            "last_email_id": None,
+            "total_alerts": 0,
+            "system_healthy": False
+        }
+
+
 app.include_router(api_router)
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)

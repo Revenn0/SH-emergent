@@ -1005,69 +1005,130 @@ function Dashboard({ user, onLogout }) {
     );
   };
 
-  const AdminPage = () => (
-    <div className="p-6 space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs text-gray-600">System Status</p>
-            <Activity className="w-4 h-4 text-gray-400" />
-          </div>
-          <div className="flex items-center space-x-2">
-            <XCircle className="w-5 h-5 text-red-500" />
-            <span className="text-lg font-semibold text-red-600">Error</span>
-          </div>
-        </div>
+  const AdminPage = () => {
+    const [systemStatus, setSystemStatus] = useState(null);
+    const [loadingStatus, setLoadingStatus] = useState(true);
 
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs text-gray-600">Database</p>
-            <Database className="w-4 h-4 text-gray-400" />
-          </div>
-          <div className="flex items-center space-x-2">
-            <CheckCircle className="w-5 h-5 text-green-500" />
-            <span className="text-lg font-semibold text-green-600">Connected</span>
-          </div>
-          <p className="text-xs text-gray-500 mt-1">Neon PostgreSQL</p>
-        </div>
+    useEffect(() => {
+      loadSystemStatus();
+      const interval = setInterval(loadSystemStatus, 30000); // Refresh every 30s
+      return () => clearInterval(interval);
+    }, []);
 
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs text-gray-600">Gmail Integration</p>
-            <Mail className="w-4 h-4 text-gray-400" />
-          </div>
-          <div className="flex items-center space-x-2">
-            {gmailConnected ? (
-              <>
-                <CheckCircle className="w-5 h-5 text-green-500" />
-                <span className="text-lg font-semibold text-green-600">Active</span>
-              </>
-            ) : (
-              <>
-                <Clock className="w-5 h-5 text-yellow-500" />
-                <span className="text-lg font-semibold text-yellow-600">Inactive</span>
-              </>
+    const loadSystemStatus = async () => {
+      try {
+        const response = await api.get("/system/status");
+        setSystemStatus(response.data);
+      } catch (error) {
+        console.error("Failed to load system status:", error);
+      } finally {
+        setLoadingStatus(false);
+      }
+    };
+
+    if (loadingStatus) {
+      return (
+        <div className="p-6 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
+        </div>
+      );
+    }
+
+    return (
+      <div className="p-6 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-gray-600">System Status</p>
+              <Activity className="w-4 h-4 text-gray-400" />
+            </div>
+            <div className="flex items-center space-x-2">
+              {systemStatus?.system_healthy ? (
+                <>
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <span className="text-lg font-semibold text-green-600">Online</span>
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-5 h-5 text-red-500" />
+                  <span className="text-lg font-semibold text-red-600">Error</span>
+                </>
+              )}
+            </div>
+            {systemStatus?.last_sync_at && (
+              <p className="text-xs text-gray-500 mt-2">
+                Last sync: {formatUKTimestamp(systemStatus.last_sync_at)}
+              </p>
             )}
           </div>
-          <p className="text-xs text-gray-500 mt-1">{gmailConnected ? "Connected" : "Token expired or missing"}</p>
-        </div>
 
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs text-gray-600">Total Alerts</p>
-            <Activity className="w-4 h-4 text-gray-400" />
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-gray-600">Database</p>
+              <Database className="w-4 h-4 text-gray-400" />
+            </div>
+            <div className="flex items-center space-x-2">
+              {systemStatus?.database_connected ? (
+                <>
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <span className="text-lg font-semibold text-green-600">Connected</span>
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-5 h-5 text-red-500" />
+                  <span className="text-lg font-semibold text-red-600">Disconnected</span>
+                </>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Neon PostgreSQL</p>
           </div>
-          <p className="text-2xl font-semibold text-gray-900">{stats.total}</p>
-          <p className="text-xs text-gray-500 mt-1">0 unread</p>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-1">Last Sync Status</h3>
-          <p className="text-xs text-gray-500 mb-4">Most recent email synchronization</p>
-          <p className="text-sm text-gray-600">No sync history available</p>
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-gray-600">Gmail Integration</p>
+              <Mail className="w-4 h-4 text-gray-400" />
+            </div>
+            <div className="flex items-center space-x-2">
+              {systemStatus?.gmail_connected ? (
+                <>
+                  <CheckCircle className="w-5 h-5 text-green-500" />
+                  <span className="text-lg font-semibold text-green-600">Active</span>
+                </>
+              ) : (
+                <>
+                  <Clock className="w-5 h-5 text-yellow-500" />
+                  <span className="text-lg font-semibold text-yellow-600">Inactive</span>
+                </>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              {systemStatus?.gmail_email || "Not configured"}
+            </p>
+          </div>
+
+          <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs text-gray-600">Total Alerts</p>
+              <Activity className="w-4 h-4 text-gray-400" />
+            </div>
+            <p className="text-2xl font-semibold text-gray-900">{systemStatus?.total_alerts || 0}</p>
+            <p className="text-xs text-gray-500 mt-1">In database</p>
+          </div>
         </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h3 className="text-sm font-semibold text-gray-900 mb-1">Last Sync Status</h3>
+            <p className="text-xs text-gray-500 mb-4">Most recent email synchronization</p>
+            {systemStatus?.last_sync_at ? (
+              <div>
+                <p className="text-sm font-medium text-gray-900">{formatUKTimestamp(systemStatus.last_sync_at)}</p>
+                <p className="text-xs text-gray-500 mt-1">Last Email ID: {systemStatus.last_email_id || 'N/A'}</p>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-600">No sync history available</p>
+            )}
+          </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <h3 className="text-sm font-semibold text-gray-900 mb-1">Activity Summary</h3>
@@ -1145,7 +1206,8 @@ function Dashboard({ user, onLogout }) {
         </div>
       </div>
     </div>
-  );
+    );
+  };
 
   const SettingsPage = () => (
     <div className="p-6 space-y-6">
