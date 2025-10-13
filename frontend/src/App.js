@@ -246,10 +246,10 @@ function Dashboard({ user, onLogout }) {
   }, [selectedCategory]);
 
   useEffect(() => {
-    // Auto-refresh alerts and statistics every 10 seconds (silent, no loading spinner)
+    // Auto-refresh alerts and statistics every 60 seconds (silent, no loading spinner)
     const interval = setInterval(() => {
       loadAlertsQuiet(selectedCategory !== "All" ? selectedCategory : null);
-    }, 10000);
+    }, 60000);
     
     return () => {
       if (interval) clearInterval(interval);
@@ -1300,18 +1300,18 @@ function Dashboard({ user, onLogout }) {
 
       <div className="bg-white rounded-lg border border-red-200 p-6">
         <h3 className="text-sm font-semibold text-gray-900 mb-2">Danger Zone</h3>
-        <p className="text-xs text-gray-500 mb-4">Ações irreversíveis - use com cuidado</p>
+        <p className="text-xs text-gray-500 mb-4">Irreversible actions - use with caution</p>
         <div className="flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-md">
           <div>
-            <p className="text-sm font-medium text-red-900">Limpar Todo Histórico</p>
-            <p className="text-xs text-red-700 mt-0.5">Deleta todos os alertas e reseta checkpoint de sincronização</p>
+            <p className="text-sm font-medium text-red-900">Clear All History</p>
+            <p className="text-xs text-red-700 mt-0.5">Deletes all alerts and resets sync checkpoint</p>
           </div>
           <button
             onClick={handleClearHistory}
             className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 transition"
           >
             <Trash2 className="inline w-4 h-4 mr-1" />
-            Limpar Tudo
+            Clear All
           </button>
         </div>
       </div>
