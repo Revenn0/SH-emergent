@@ -691,16 +691,16 @@ function Dashboard({ user, onLogout }) {
             <p className="text-xs text-gray-500 mt-1">Filtered alerts</p>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="bg-white rounded-lg border border-gray-200 p-4 cursor-pointer hover:border-orange-400 transition" onClick={() => setSelectedCategory("Over-turn")}>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs text-gray-600">High Priority</p>
               <Info className="w-4 h-4 text-gray-400" />
             </div>
-            <p className="text-2xl font-semibold text-gray-900">{stats.unread || 0}</p>
+            <p className="text-2xl font-semibold text-gray-900">{stats.highPriority || 0}</p>
             <p className="text-xs text-gray-500 mt-1">Requires attention</p>
           </div>
 
-          <div className="bg-white rounded-lg border border-red-200 p-4">
+          <div className="bg-white rounded-lg border border-red-200 p-4 cursor-pointer hover:border-red-400 transition" onClick={() => setSelectedCategory("Crash detect")}>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs text-gray-600">Crash detect</p>
               <AlertTriangle className="w-4 h-4 text-red-600" />
@@ -722,7 +722,7 @@ function Dashboard({ user, onLogout }) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-          <div className="bg-white rounded-lg border border-red-200 p-4">
+          <div className="bg-white rounded-lg border border-red-200 p-4 cursor-pointer hover:border-red-400 transition" onClick={() => setSelectedCategory("Over-turn")}>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs text-gray-600">Over-Turn</p>
               <AlertTriangle className="w-4 h-4 text-red-600" />
@@ -731,7 +731,7 @@ function Dashboard({ user, onLogout }) {
             <p className="text-xs text-gray-500 mt-1">Over-turn alerts</p>
           </div>
 
-          <div className="bg-white rounded-lg border border-orange-200 p-4">
+          <div className="bg-white rounded-lg border border-orange-200 p-4 cursor-pointer hover:border-orange-400 transition" onClick={() => setSelectedCategory("No Communication")}>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs text-gray-600">No Communication</p>
               <XCircle className="w-4 h-4 text-orange-600" />
@@ -740,7 +740,7 @@ function Dashboard({ user, onLogout }) {
             <p className="text-xs text-gray-500 mt-1">Connection lost</p>
           </div>
 
-          <div className="bg-white rounded-lg border border-purple-200 p-4">
+          <div className="bg-white rounded-lg border border-purple-200 p-4 cursor-pointer hover:border-purple-400 transition" onClick={() => setSelectedCategory("Crash detect")}>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs text-gray-600">Heavy Impact</p>
               <Activity className="w-4 h-4 text-purple-600" />
