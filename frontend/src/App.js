@@ -220,6 +220,7 @@ function Dashboard({ user, onLogout }) {
   });
 
   const [bikes, setBikes] = useState([]);
+  const [loadingBikes, setLoadingBikes] = useState(false);
   const [selectedBikeId, setSelectedBikeId] = useState(null);
   const [showBikeHistory, setShowBikeHistory] = useState(false);
 
@@ -608,24 +609,22 @@ function Dashboard({ user, onLogout }) {
     );
   };
 
-  const BikesPage = () => {
-    const [loadingBikes, setLoadingBikes] = useState(true);
+  const loadBikes = useCallback(async () => {
+    try {
+      setLoadingBikes(true);
+      const response = await api.get("/bikes/list");
+      setBikes(response.data.bikes || []);
+    } catch (error) {
+      console.error("Failed to load bikes:", error);
+    } finally {
+      setLoadingBikes(false);
+    }
+  }, []);
 
+  const BikesPage = () => {
     useEffect(() => {
       loadBikes();
-    }, []);
-
-    const loadBikes = async () => {
-      try {
-        setLoadingBikes(true);
-        const response = await api.get("/bikes/list");
-        setBikes(response.data.bikes || []);
-      } catch (error) {
-        console.error("Failed to load bikes:", error);
-      } finally {
-        setLoadingBikes(false);
-      }
-    };
+    }, [loadBikes]);
 
     const openBikeHistory = (bikeId) => {
       setSelectedBikeId(bikeId);
@@ -899,7 +898,6 @@ function Dashboard({ user, onLogout }) {
                     <th className="text-left py-3 px-4 text-xs font-medium text-gray-600">Message</th>
                     <th className="text-left py-3 px-4 text-xs font-medium text-gray-600">Severity</th>
                     <th className="text-left py-3 px-4 text-xs font-medium text-gray-600">Timestamp</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-600">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -907,7 +905,7 @@ function Dashboard({ user, onLogout }) {
                     !searchQuery || group.device.toLowerCase().includes(searchQuery.toLowerCase())
                   ).length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="text-center py-12 text-sm text-gray-500">
+                      <td colSpan="7" className="text-center py-12 text-sm text-gray-500">
                         {searchQuery ? `No alerts found for "${searchQuery}"` : "No alerts available"}
                       </td>
                     </tr>
@@ -956,17 +954,6 @@ function Dashboard({ user, onLogout }) {
                         </td>
                         <td className="py-3 px-4 text-xs text-gray-500">
                           {formatUKTimestamp(group.latestAlert.alert_time)}
-                        </td>
-                        <td className="py-3 px-4">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteAlert(group.latestAlert.id);
-                            }}
-                            className="p-1 text-red-600 hover:bg-red-50 rounded transition"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
                         </td>
                       </tr>
                     ))
