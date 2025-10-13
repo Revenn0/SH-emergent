@@ -39,6 +39,13 @@ The system employs a client-server architecture with a Python FastAPI backend an
     - All API routes protected via JWT dependency injection from cookies
     - Admin user auto-created on startup (username: `admin`, password: `dimension`)
     - **Security**: HttpOnly, Secure, SameSite=lax cookies protect against XSS and CSRF attacks
+    - **Role-Based Access Control (RBAC)**: Multi-level user permissions system:
+        - **Admin Role**: Full system access including user management, sync settings, and all features
+        - **Viewer Role**: Limited access to Bike Tracker and Bikes view only (read-only operations)
+        - Role enforcement at backend via `get_admin_user` dependency on admin-only endpoints
+        - Role propagated through login and refresh token flows to prevent privilege escalation
+        - User Management panel in Admin Dashboard for creating view-only accounts
+        - Frontend hides admin-only features (Admin Dashboard, Service Tracker) for viewer accounts
 - **Bikes Management System**: Complete bike tracking and history management:
     - **Bikes List**: View all motorcycles with device serial, alert count, and latest alert time
     - **Bike History**: Individual bike history showing all alerts and notes in chronological order (newest first)
@@ -82,7 +89,7 @@ The system employs a client-server architecture with a Python FastAPI backend an
     - Connection string stored securely in `DATABASE_URL` environment variable
     - Setup script available in `neon_database_setup.sql` for initial database configuration
 - **Database Schema**:
-    - `users` table: Stores user authentication and Gmail configuration (`id`, `username`, `password_hash`, `email`, `full_name`, `gmail_email`, `gmail_app_password`, `created_at`, `updated_at`).
+    - `users` table: Stores user authentication and Gmail configuration (`id`, `username`, `password_hash`, `email`, `full_name`, `gmail_email`, `gmail_app_password`, `role` [admin/viewer], `sync_interval_minutes` [default 10], `email_limit_per_sync` [default 100], `created_at`, `updated_at`).
     - `tracker_alerts` table: Stores parsed alert data (`id`, `user_id`, `email_id`, `alert_type`, `alert_time`, `location`, `latitude`, `longitude`, `device_serial`, `tracker_name`, `account_name`, `raw_body`, `created_at`, `status`, `acknowledged`, `acknowledged_at`, `acknowledged_by`, `notes`, `assigned_to`, `favorite`).
     - `bikes` table: Stores bike records (`id`, `user_id`, `tracker_name`, `device_serial`, `latest_alert_at`, `created_at`, `updated_at`). Auto-populated from tracker alerts with unique constraint on user_id + tracker_name.
     - `bike_notes` table: Stores notes for bikes (`id`, `bike_id`, `user_id`, `note`, `author`, `created_at`). All notes display newest-first.
