@@ -69,8 +69,15 @@ The system employs a client-server architecture with a Python FastAPI backend an
     - **Refresh Alerts** button: Reloads alerts from database only (no manual email reading)
     - **Login Synchronization**: User login only synchronizes with the already-updated database
     - Simple, reliable architecture with automatic background processing
-- **Alert Management**: Allows viewing, sorting, filtering, and deleting alerts (within the app only), along with features for acknowledging, updating status, adding notes, assigning, and favoriting alerts.
+- **Alert Management**: Allows viewing, sorting, filtering, and deleting alerts (within the app only), along with features for acknowledging, updating status, adding notes, assigning, and favoriting alerts. Actions column removed for cleaner UI.
 - **Automatic Background Synchronization**: A background task runs every 10 minutes to fetch new emails incrementally (up to 100 emails per sync) and inserts them directly into the database.
+- **Silent Auto-Refresh System**: 
+    - Alerts table and stats refresh automatically every 10 seconds without user interaction
+    - Uses `loadAlertsQuiet()` function that fetches data without showing loading spinner (prevents UI flickering)
+    - Automatically resets pagination to page 1 to maintain consistency
+    - Stats-only endpoint (`/api/alerts/stats-only`) available for lightweight updates when needed
+    - Manual "Refresh Alerts" button still available for user-initiated refresh with loading feedback
+- **Bikes Page Performance**: Optimized to prevent infinite loading loops by using `useCallback` for data fetching and triggering load only when navigating to the page
 - **Pagination System**: SQL-based pagination with LIMIT/OFFSET for efficient data loading (default 50 items/page, max 200). Includes aggregate queries for statistics without loading full dataset.
 - **Data Ordering**: All lists display newest-first (ORDER BY created_at DESC) for alerts, notes, and bike history.
 

@@ -655,10 +655,14 @@ function Dashboard({ user, onLogout }) {
     }
   }, []);
 
-  const BikesPage = () => {
-    useEffect(() => {
+  // Load bikes when navigating to bikes page
+  useEffect(() => {
+    if (currentPage === "bikes") {
       loadBikes();
-    }, [loadBikes]);
+    }
+  }, [currentPage, loadBikes]);
+
+  const BikesPage = () => {
 
     const openBikeHistory = (bikeId) => {
       setSelectedBikeId(bikeId);
