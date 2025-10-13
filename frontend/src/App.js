@@ -244,18 +244,15 @@ function Dashboard({ user, onLogout }) {
   }, [selectedCategory]);
 
   useEffect(() => {
-    // Auto-refresh alerts every 10 seconds (only when on page 1 to avoid disrupting lazy loading)
+    // Auto-refresh only statistics every 10 seconds (doesn't reload alert list, prevents flickering)
     const interval = setInterval(() => {
-      // Only auto-refresh if user is on page 1 (haven't loaded more)
-      if (page === 1) {
-        loadAlerts(selectedCategory !== "All" ? selectedCategory : null, 1, false);
-      }
+      loadStatsOnly(selectedCategory !== "All" ? selectedCategory : null);
     }, 10000);
     
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [selectedCategory, page]);
+  }, [selectedCategory]);
 
   useEffect(() => {
     if (alerts.length > 0) {
@@ -272,6 +269,21 @@ function Dashboard({ user, onLogout }) {
     }
   };
 
+  const loadStatsOnly = async (category = null) => {
+    try {
+      const params = new URLSearchParams();
+      if (category && category !== "All") {
+        params.append('category', category);
+      }
+      
+      const url = `/alerts/stats-only?${params.toString()}`;
+      const response = await api.get(url);
+      
+      setStats(response.data.stats);
+    } catch (error) {
+      console.error("Failed to load stats:", error);
+    }
+  };
 
   const loadAlerts = async (category = null, pageNum = page, append = false) => {
     try {

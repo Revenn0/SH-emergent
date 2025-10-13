@@ -1176,6 +1176,108 @@ async def list_alerts(
         }
 
 
+@api_router.get("/alerts/stats-only")
+async def get_stats_only(
+    category: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get only statistics without alert list (for auto-refresh)"""
+    async with db_pool.acquire() as conn:
+        where_clause = "WHERE user_id = $1"
+        params = [current_user['id']]
+        
+        if category and category != "All":
+            where_clause += " AND alert_type = $2"
+            params.append(category)
+        
+        total_count = await conn.fetchval(
+            f"SELECT COUNT(*) FROM tracker_alerts {where_clause}",
+            *params
+        )
+        
+        category_stats = await conn.fetch(
+            f"""
+            SELECT alert_type, COUNT(*) as count 
+            FROM tracker_alerts 
+            {where_clause}
+            GROUP BY alert_type
+            """,
+            *params
+        )
+        
+        categories = {row["alert_type"] or "Other": row["count"] for row in category_stats}
+        
+        acknowledged_count = await conn.fetchval(
+            f"""
+            SELECT COUNT(*) FROM tracker_alerts 
+            {where_clause} AND acknowledged = TRUE
+            """,
+            *params
+        ) or 0
+        
+        over_turn_count = await conn.fetchval(
+            f"""
+            SELECT COUNT(*) FROM tracker_alerts 
+            {where_clause} AND alert_type = 'Over-turn'
+            """,
+            *params
+        ) or 0
+        
+        no_communication_count = await conn.fetchval(
+            f"""
+            SELECT COUNT(*) FROM tracker_alerts 
+            {where_clause} AND alert_type LIKE '%No Communication%'
+            """,
+            *params
+        ) or 0
+        
+        heavy_impact_count = await conn.fetchval(
+            f"""
+            SELECT COUNT(*) FROM tracker_alerts 
+            {where_clause} AND alert_type LIKE '%Crash detect%'
+            """,
+            *params
+        ) or 0
+        
+        device_alerts_data = await conn.fetch(
+            f"""
+            SELECT tracker_name, array_agg(DISTINCT alert_type) as alert_types
+            FROM tracker_alerts 
+            {where_clause}
+            GROUP BY tracker_name
+            """,
+            *params
+        )
+        
+        high_priority_count = 0
+        heavy_impact_bikes_count = 0
+        
+        for row in device_alerts_data:
+            alert_types = set(row["alert_types"] or [])
+            has_light_sensor = "Light Sensor" in alert_types
+            has_over_turn = "Over-turn" in alert_types
+            has_heavy_impact = any("Crash detect" in str(t) for t in alert_types if t)
+            has_no_comm = any("No Communication" in str(t) for t in alert_types if t)
+            
+            if has_light_sensor and has_over_turn:
+                heavy_impact_bikes_count += 1
+            elif has_over_turn or has_heavy_impact or has_no_comm:
+                high_priority_count += 1
+        
+        return {
+            "stats": {
+                "total": total_count,
+                "highPriority": high_priority_count,
+                "heavyImpact": heavy_impact_bikes_count,
+                "acknowledged": acknowledged_count,
+                "overTurn": over_turn_count,
+                "noCommunication": no_communication_count,
+                "heavyImpactAlerts": heavy_impact_count,
+                "categories": categories
+            }
+        }
+
+
 @api_router.delete("/alerts/clear-all/history")
 async def clear_all_alerts(current_user: dict = Depends(get_current_user)):
     """Clear all alerts and sync checkpoint (reset system)"""
