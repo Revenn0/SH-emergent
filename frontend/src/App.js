@@ -1246,6 +1246,75 @@ function Dashboard({ user, onLogout }) {
         </div>
       </div>
 
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">User Management</h3>
+        <p className="text-xs text-gray-500 mb-4">Create limited access accounts (view-only)</p>
+        
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          const formData = new FormData(e.target);
+          const username = formData.get('username');
+          const email = formData.get('email');
+          const password = formData.get('password');
+          
+          try {
+            await api.post("/users/create", {
+              username,
+              email,
+              password,
+              role: "viewer"
+            });
+            alert(`User '${username}' created successfully!`);
+            e.target.reset();
+          } catch (error) {
+            alert(error.response?.data?.detail || "Failed to create user");
+          }
+        }} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                Username
+              </label>
+              <input
+                type="text"
+                name="username"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none text-sm"
+                placeholder="e.g., viewer1"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                Email
+              </label>
+              <input
+                type="email"
+                name="email"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none text-sm"
+                placeholder="user@example.com"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                Password
+              </label>
+              <input
+                type="password"
+                name="password"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none text-sm"
+                placeholder="••••••••"
+              />
+            </div>
+          </div>
+          <button type="submit" className="px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 transition text-sm">
+            <UserPlus className="inline w-4 h-4 mr-1" />
+            Create View-Only User
+          </button>
+        </form>
+      </div>
+
       <div className="bg-white rounded-lg border border-red-200 p-6">
         <h3 className="text-sm font-semibold text-gray-900 mb-2">Danger Zone</h3>
         <p className="text-xs text-gray-500 mb-4">Ações irreversíveis - use com cuidado</p>

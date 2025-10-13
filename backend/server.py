@@ -269,7 +269,7 @@ async def get_current_user(request: Request):
     
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
-            "SELECT id, username, email, full_name, created_at FROM users WHERE id = $1",
+            "SELECT id, username, email, full_name, role, created_at FROM users WHERE id = $1",
             user_id
         )
         
@@ -511,17 +511,18 @@ async def startup_db():
             """
         )
         
-        # Add sync configuration columns if they don't exist
+        # Add sync configuration and role columns if they don't exist
         try:
             await conn.execute(
                 """
                 ALTER TABLE users 
                 ADD COLUMN IF NOT EXISTS sync_interval_minutes INTEGER DEFAULT 10,
-                ADD COLUMN IF NOT EXISTS email_limit_per_sync INTEGER DEFAULT 100
+                ADD COLUMN IF NOT EXISTS email_limit_per_sync INTEGER DEFAULT 100,
+                ADD COLUMN IF NOT EXISTS role VARCHAR DEFAULT 'admin'
                 """
             )
         except Exception as e:
-            logger.warning(f"Error adding sync config columns (may already exist): {str(e)}")
+            logger.warning(f"Error adding config columns (may already exist): {str(e)}")
         
         admin_exists = await conn.fetchval(
             "SELECT COUNT(*) FROM users WHERE username = 'admin'"
@@ -653,7 +654,7 @@ async def login(request: LoginRequest, response: Response):
     """Login with JWT authentication using HttpOnly cookies"""
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
-            "SELECT id, username, email, password_hash, full_name FROM users WHERE username = $1",
+            "SELECT id, username, email, password_hash, full_name, role FROM users WHERE username = $1",
             request.username
         )
         
@@ -690,12 +691,14 @@ async def login(request: LoginRequest, response: Response):
         
         logger.info(f"User logged in: {request.username}")
         
+        user_dict = dict(user)
         return {
             "user": {
-                "id": user['id'],
-                "username": user['username'],
-                "email": user['email'],
-                "full_name": user['full_name']
+                "id": user_dict['id'],
+                "username": user_dict['username'],
+                "email": user_dict['email'],
+                "full_name": user_dict['full_name'],
+                "role": user_dict.get('role', 'admin')
             }
         }
 
@@ -715,7 +718,7 @@ async def refresh_token_endpoint(req: Request, response: Response):
     
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow(
-            "SELECT id, username, email, full_name FROM users WHERE id = $1",
+            "SELECT id, username, email, full_name, role FROM users WHERE id = $1",
             user_id
         )
         
@@ -750,12 +753,14 @@ async def refresh_token_endpoint(req: Request, response: Response):
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
     )
     
+    user_dict = dict(user)
     return {
         "user": {
-            "id": user['id'],
-            "username": user['username'],
-            "email": user['email'],
-            "full_name": user['full_name']
+            "id": user_dict['id'],
+            "username": user_dict['username'],
+            "email": user_dict['email'],
+            "full_name": user_dict['full_name'],
+            "role": user_dict.get('role', 'admin')
         }
     }
 
@@ -797,6 +802,63 @@ async def logout(req: Request, response: Response):
     )
     
     return {"success": True, "message": "Logged out successfully"}
+
+
+async def get_admin_user(current_user: dict = Depends(get_current_user)):
+    """Dependency to ensure user is admin"""
+    if current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+
+@api_router.post("/users/create")
+async def create_user(request: dict, admin_user: dict = Depends(get_admin_user)):
+    """Create a new user (admin only)"""
+    username = request.get('username')
+    email = request.get('email')
+    password = request.get('password')
+    role = request.get('role', 'viewer')  # Default to viewer
+    
+    if not username or not email or not password:
+        raise HTTPException(status_code=400, detail="Username, email, and password are required")
+    
+    if role not in ['admin', 'viewer']:
+        raise HTTPException(status_code=400, detail="Role must be 'admin' or 'viewer'")
+    
+    async with db_pool.acquire() as conn:
+        # Check if username or email already exists
+        existing = await conn.fetchval(
+            "SELECT COUNT(*) FROM users WHERE username = $1 OR email = $2",
+            username, email
+        )
+        
+        if existing > 0:
+            raise HTTPException(status_code=400, detail="Username or email already exists")
+        
+        import uuid
+        user_id = str(uuid.uuid4())
+        password_hash = pwd_context.hash(password)
+        
+        await conn.execute(
+            """
+            INSERT INTO users (id, username, email, password_hash, role)
+            VALUES ($1, $2, $3, $4, $5)
+            """,
+            user_id, username, email, password_hash, role
+        )
+    
+    return {"success": True, "message": f"User '{username}' created successfully with role '{role}'"}
+
+
+@api_router.get("/users/list")
+async def list_users(admin_user: dict = Depends(get_admin_user)):
+    """List all users (admin only)"""
+    async with db_pool.acquire() as conn:
+        users = await conn.fetch(
+            "SELECT id, username, email, role, created_at FROM users ORDER BY created_at DESC"
+        )
+        
+        return {"users": [dict(u) for u in users]}
 
 
 def connect_imap(email_addr: str, app_password: str):
