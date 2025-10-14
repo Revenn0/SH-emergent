@@ -1052,7 +1052,7 @@ async def list_alerts(
         )
         
         offset = (page - 1) * limit
-        where_clause = "WHERE user_id = $1"
+        where_clause = "WHERE user_id = $1 AND (acknowledged IS NULL OR acknowledged = FALSE)"
         params = [current_user['id']]
         
         if category and category != "All":
