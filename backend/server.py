@@ -1753,8 +1753,9 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:5000",
-        "https://c363f9ef-5f69-4abe-887f-60d877a4e2ce-00-25ix68esofxzf.riker.replit.dev",
-        "https://*.replit.dev",
+        "http://127.0.0.1:5000",
+        "https://3ccd770e-286e-4b10-bf81-649b35418e6f-00-1akfuqkm3jdil.spock.replit.dev",
+        "https://3ccd770e-286e-4b10-bf81-649b35418e6f-00-1akfuqkm3jdil.spock.replit.dev:5000",
     ],
     allow_methods=["*"],
     allow_headers=["*"],
