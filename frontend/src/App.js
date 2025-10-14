@@ -505,11 +505,12 @@ function Dashboard({ user, onLogout }) {
   const handleAcknowledgeAlert = async (alertId) => {
     try {
       await api.post(`/alerts/${alertId}/acknowledge`, {
-        acknowledged_by: username
+        acknowledged_by: user?.username || 'User'
       });
       await loadAlerts();
       setShowModal(false);
     } catch (error) {
+      console.error("Failed to acknowledge alert:", error);
       alert("Failed to acknowledge alert");
     }
   };
