@@ -331,7 +331,8 @@ def categorize_alert(alert_type: str) -> str:
     """Categorize alert based on type"""
     alert_lower = alert_type.lower()
     
-    if "heavy impact" in alert_lower:
+    # Crash detect includes: heavy impact, over-turn, tamper alert
+    if any(keyword in alert_lower for keyword in ["heavy impact", "over-turn", "overturn", "tamper"]):
         return "Crash detect"
     elif "light sensor" in alert_lower:
         return "Light Sensor"
@@ -339,10 +340,6 @@ def categorize_alert(alert_type: str) -> str:
         return "Out Of Country"
     elif "no communication" in alert_lower:
         return "No Communication"
-    elif "over-turn" in alert_lower or "overturn" in alert_lower:
-        return "Over-turn"
-    elif "tamper" in alert_lower:
-        return "Tamper Alert"
     elif "low battery" in alert_lower:
         return "Low Battery"
     elif "motion" in alert_lower:
