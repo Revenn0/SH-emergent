@@ -122,13 +122,6 @@ The system employs a client-server architecture with a Python FastAPI backend an
     - `refresh_tokens` table: Stores hashed refresh tokens for secure session management and token revocation.
 - **Database Migration**: `migration_to_production.sql` script available in project root for migrating development data to production database with complete instructions and validation steps.
 - **Deployment**: Configured for VM (always-on) deployment due to persistent state, continuous uptime requirement for alert monitoring, and background synchronization.
-    - **Production Deployment**: Backend serves pre-built React frontend as static files
-    - **Required Secrets** (must be added in Replit Secrets for production):
-        - `JWT_SECRET_KEY`: Secret key for JWT token signing (authentication)
-        - `GEMINI_API_KEY`: Google Gemini API key for AI alert categorization
-        - `DATABASE_URL`: PostgreSQL connection string (automatically provided by Replit)
-    - **Deploy Configuration**: VM deployment on port 5000, serving both API (`/api/*`) and frontend (`/*`)
-    - **CORS**: Configured with regex pattern to accept all Replit domains (`*.replit.dev`, `*.repl.co`)
 
 ## External Dependencies
 - **Email Service**: Gmail IMAP (for `alerts-no-reply@tracking-update.com`)
