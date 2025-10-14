@@ -552,13 +552,13 @@ async def startup_db():
             logger.info("Admin user already exists")
     
     background_task = asyncio.create_task(auto_sync_background())
-    logger.info("Background sync task started (5 minute interval, 30 email limit)")
+    logger.info("Background sync task started (10 minute interval, 30 email limit)")
 
 async def auto_sync_background():
-    """Background task to automatically sync alerts every 5 minutes for all users with 30 email limit"""
+    """Background task to automatically sync alerts every 10 minutes for all users with 30 email limit"""
     while True:
         try:
-            await asyncio.sleep(300)  # 5 minutes
+            await asyncio.sleep(600)  # 10 minutes
             
             async with db_pool.acquire() as conn:
                 users = await conn.fetch(
