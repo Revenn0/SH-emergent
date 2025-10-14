@@ -1122,6 +1122,8 @@ async def list_alerts(
     category: Optional[str] = Query(None), 
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=200),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user)
 ):
     """Get tracker alerts with pagination and optional category filter"""
@@ -1136,8 +1138,16 @@ async def list_alerts(
         params = [current_user['id']]
         
         if category and category != "All":
-            where_clause += " AND alert_type = $2"
+            where_clause += f" AND alert_type = ${len(params) + 1}"
             params.append(category)
+        
+        if start_date:
+            where_clause += f" AND created_at >= ${len(params) + 1}"
+            params.append(start_date)
+        
+        if end_date:
+            where_clause += f" AND created_at <= ${len(params) + 1}"
+            params.append(end_date)
         
         total_count = await conn.fetchval(
             f"SELECT COUNT(*) FROM tracker_alerts {where_clause}",

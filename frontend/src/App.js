@@ -205,6 +205,8 @@ function Dashboard({ user, onLogout }) {
   const [darkMode, setDarkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("priority");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20); // Reduced for lazy loading
@@ -333,6 +335,13 @@ function Dashboard({ user, onLogout }) {
       }
       params.append('page', pageNum);
       params.append('limit', limit);
+      
+      if (startDate) {
+        params.append('start_date', startDate);
+      }
+      if (endDate) {
+        params.append('end_date', endDate);
+      }
       
       const url = `/alerts/list?${params.toString()}`;
       
@@ -995,6 +1004,24 @@ function Dashboard({ user, onLogout }) {
                       Clear
                     </button>
                   )}
+                </div>
+                <div className="flex items-center space-x-2">
+                  <label className="text-xs font-medium text-gray-600">From:</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
+                    className="px-2 py-1 text-xs border border-gray-300 rounded-md"
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <label className="text-xs font-medium text-gray-600">To:</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+                    className="px-2 py-1 text-xs border border-gray-300 rounded-md"
+                  />
                 </div>
               </div>
               <div className="flex items-center space-x-4">
