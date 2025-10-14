@@ -189,6 +189,7 @@ function Dashboard({ user, onLogout }) {
   });
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState({ total: 0, processed: 0, remaining: 0 });
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
@@ -489,18 +490,42 @@ function Dashboard({ user, onLogout }) {
 
   const handleSyncTodayEmails = async () => {
     setSyncing(true);
+    setSyncProgress({ total: 0, processed: 0, remaining: 0 });
+    
     try {
-      const response = await api.post("/sync/today");
-      alert(response.data.message || "Today's emails synced successfully");
+      let completed = false;
+      let totalEmails = 0;
+      
+      while (!completed) {
+        const response = await api.post("/sync/progressive");
+        const data = response.data;
+        
+        totalEmails = data.total;
+        setSyncProgress({
+          total: data.total,
+          processed: data.processed,
+          remaining: data.remaining
+        });
+        
+        completed = data.completed;
+        
+        // Small delay to prevent overwhelming the server
+        if (!completed) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      
+      alert(`Sync completed! ${totalEmails} total emails checked`);
       
       // Refresh alerts list
       setPage(1);
       await loadAlerts(selectedCategory !== "All" ? selectedCategory : null, 1, false);
     } catch (error) {
-      console.error("Failed to sync today's emails:", error);
-      alert(error.response?.data?.detail || "Failed to sync today's emails");
+      console.error("Failed to sync emails:", error);
+      alert(error.response?.data?.detail || "Failed to sync emails");
     } finally {
       setSyncing(false);
+      setSyncProgress({ total: 0, processed: 0, remaining: 0 });
     }
   };
 
@@ -729,7 +754,11 @@ function Dashboard({ user, onLogout }) {
               className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
               <Download className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-              <span>Update All Emails</span>
+              <span>
+                {syncing && syncProgress.total > 0 
+                  ? `Syncing: ${syncProgress.processed}/${syncProgress.total} (${syncProgress.remaining} remaining)` 
+                  : 'Update All Emails'}
+              </span>
             </button>
           </div>
         </div>
