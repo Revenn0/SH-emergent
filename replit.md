@@ -70,7 +70,7 @@ The system employs a client-server architecture with a Python FastAPI backend an
     - **Login Synchronization**: User login only synchronizes with the already-updated database
     - Simple, reliable architecture with automatic background processing
 - **Alert Management**: Allows viewing, sorting, filtering, and deleting alerts (within the app only), along with features for acknowledging, updating status, adding notes, assigning, and favoriting alerts. Actions column removed for cleaner UI.
-- **Automatic Background Synchronization**: A background task runs every 10 minutes to fetch new emails incrementally (up to 30 emails per sync) and inserts them directly into the database.
+- **Automatic Background Synchronization**: A background task runs every 5 minutes to fetch new emails incrementally (up to 30 emails per sync) and inserts them directly into the database.
 - **Silent Auto-Refresh System**: 
     - **Bike Tracker Page**: Alerts table and stats refresh automatically every 60 seconds without user interaction
     - **Admin Dashboard**: System status refreshes automatically every 60 seconds without loading spinner
@@ -108,17 +108,11 @@ The system employs a client-server architecture with a Python FastAPI backend an
 - **Alert Lifecycle Management**: Supports a workflow for alerts with statuses: New, In Progress, Resolved, Closed.
 
 ### System Design Choices
-- **Backend (Port 8080)**: FastAPI with PostgreSQL, handling email parsing, alert categorization, IMAP client operations, and alert grouping logic.
+- **Backend (Port 8080)**: FastAPI with Neon PostgreSQL, handling email parsing, alert categorization, IMAP client operations, and alert grouping logic.
 - **Frontend (Port 5000)**: React SPA with Tailwind CSS and Lucide React icons, providing a responsive user interface across "Bike Tracker", "Admin Dashboard", and "Service Tracker" views. Uses local storage for session management.
-- **Database**: PostgreSQL (Replit-managed database service)
+- **Database**: Neon PostgreSQL (cloud-hosted, managed database service)
     - Connection string stored securely in `DATABASE_URL` environment variable
-    - Works seamlessly in both development and production environments
-    - **Migration completed**: All data successfully migrated from Neon to Replit database (14/10/2024)
-        - 2 users migrated
-        - 157 tracker alerts migrated
-        - 30 bikes migrated
-        - 2 bike notes migrated
-        - All sync checkpoints and refresh tokens migrated
+    - Setup script available in `neon_database_setup.sql` for initial database configuration
 - **Database Schema**:
     - `users` table: Stores user authentication and Gmail configuration (`id`, `username`, `password_hash`, `email`, `full_name`, `gmail_email`, `gmail_app_password`, `role` [admin/viewer], `sync_interval_minutes` [default 10], `email_limit_per_sync` [default 100], `created_at`, `updated_at`).
     - `tracker_alerts` table: Stores parsed alert data (`id`, `user_id`, `email_id`, `alert_type`, `alert_time`, `location`, `latitude`, `longitude`, `device_serial`, `tracker_name`, `account_name`, `raw_body`, `created_at`, `status`, `acknowledged`, `acknowledged_at`, `acknowledged_by`, `notes`, `assigned_to`, `favorite`).
@@ -126,11 +120,12 @@ The system employs a client-server architecture with a Python FastAPI backend an
     - `bike_notes` table: Stores notes for bikes (`id`, `bike_id`, `user_id`, `note`, `author`, `created_at`). All notes display newest-first.
     - `sync_checkpoints` table: For incremental email synchronization (per-user tracking).
     - `refresh_tokens` table: Stores hashed refresh tokens for secure session management and token revocation.
-- **Database**: System now uses Replit's managed PostgreSQL exclusively (migration from Neon completed on 14/10/2024)
+- **Database Migration**: `migration_to_production.sql` script available in project root for migrating development data to production database with complete instructions and validation steps.
 - **Deployment**: Configured for VM (always-on) deployment due to persistent state, continuous uptime requirement for alert monitoring, and background synchronization.
 
 ## External Dependencies
 - **Email Service**: Gmail IMAP (for `alerts-no-reply@tracking-update.com`)
+- **Database**: Neon PostgreSQL (cloud-hosted managed database)
 - **AI**: Google Gemini (for alert categorization, optional)
 - **Mapping**: Google Maps (for displaying alert locations)
 - **Frontend Framework**: React
@@ -138,9 +133,9 @@ The system employs a client-server architecture with a Python FastAPI backend an
 - **Icons**: Lucide React icons
 
 ## Database Setup
-The system uses Replit's managed PostgreSQL database:
-1. Database is automatically provisioned by Replit
-2. Connection via `DATABASE_URL` environment variable (automatically set)
-3. Tables are created automatically on first application startup
-4. Default admin user is created on startup (username: `admin`, password: `dimension`)
-5. No manual database configuration required - works seamlessly in development and production
+To set up the Neon PostgreSQL database:
+1. Create a Neon account and database at https://neon.tech
+2. Copy the connection string provided by Neon
+3. Add the connection string as `DATABASE_URL` in Replit Secrets
+4. Run the SQL script in `neon_database_setup.sql` in the Neon SQL Editor to create all required tables and indexes
+5. The application will automatically connect to Neon on startup and create the default admin user (username: `admin`, password: `dimension`)
