@@ -1,6 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Query, Depends, Header, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
@@ -1759,3 +1760,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+build_dir = Path(__file__).parent.parent / "frontend" / "build"
+if build_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(build_dir / "static")), name="static")
+    
+    @app.get("/{full_path:path}")
+    async def serve_react_app(full_path: str):
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
+        
+        file_path = build_dir / full_path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
+        
+        return FileResponse(build_dir / "index.html")
