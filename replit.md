@@ -70,7 +70,13 @@ The system employs a client-server architecture with a Python FastAPI backend an
     - **Login Synchronization**: User login only synchronizes with the already-updated database
     - Simple, reliable architecture with automatic background processing
 - **Alert Management**: Allows viewing, sorting, filtering, and deleting alerts (within the app only), along with features for acknowledging, updating status, adding notes, assigning, and favoriting alerts. Actions column removed for cleaner UI.
-- **Automatic Background Synchronization**: A background task runs every 5 minutes to fetch new emails incrementally (up to 30 emails per sync) and inserts them directly into the database.
+- **Automatic Background Synchronization**: A background task runs every 1 hour (3600 seconds) to fetch new emails incrementally (up to 30 emails per sync) and inserts them directly into the database.
+- **Progressive Email Sync**: 
+    - **Endpoint `/api/sync/progressive`**: Processes emails in batches of 10 at a time with real-time progress tracking
+    - **Visual Progress Indicator**: Button shows "Syncing: X/Y (Z remaining)" during sync process
+    - **Non-blocking UI**: Frontend calls endpoint repeatedly with 500ms delay until completion
+    - **Parallel Processing**: Uses asyncio.gather to process email batches in parallel for faster performance
+    - **Prevents UI freeze**: Processes large email volumes without blocking the interface
 - **Silent Auto-Refresh System**: 
     - **Bike Tracker Page**: Alerts table and stats refresh automatically every 60 seconds without user interaction
     - **Admin Dashboard**: System status refreshes automatically every 60 seconds without loading spinner
