@@ -59,6 +59,10 @@ localPort = 8080
 externalPort = 8080
 
 [[ports]]
+localPort = 33105
+externalPort = 5173
+
+[[ports]]
 localPort = 39861
 externalPort = 4200
 
@@ -81,4 +85,4 @@ externalPort = 3001
 [deployment]
 deploymentTarget = "vm"
 run = ["bash", "-c", "cd backend && python -m uvicorn server:app --host 0.0.0.0 --port 5000"]
-build = ["bash", "-c", "cd frontend && yarn install && yarn build"]
+build = ["bash", "-c", "pip install -r backend/requirements.txt && cd frontend && yarn install && yarn build"]
