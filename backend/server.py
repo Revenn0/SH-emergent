@@ -1,10 +1,11 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Query, Depends, Header, Request
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
-from starlette.responses import Response
+from starlette.responses import Response, FileResponse
 import asyncpg
 import os
 import logging
@@ -1745,6 +1746,26 @@ async def get_system_status(current_user: dict = Depends(get_current_user)):
 
 app.include_router(api_router)
 
+# Serve static files from frontend build
+frontend_build_path = Path(__file__).parent.parent / "frontend" / "build"
+if frontend_build_path.exists():
+    app.mount("/static", StaticFiles(directory=str(frontend_build_path / "static")), name="static")
+    
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        """Serve React frontend for all non-API routes"""
+        # Don't intercept API routes
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="API endpoint not found")
+        
+        # Serve specific files if they exist
+        file_path = frontend_build_path / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        
+        # Serve index.html for all other routes (React Router)
+        return FileResponse(frontend_build_path / "index.html")
+
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.add_middleware(
@@ -1753,9 +1774,10 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:5000",
-        "https://c363f9ef-5f69-4abe-887f-60d877a4e2ce-00-25ix68esofxzf.riker.replit.dev",
-        "https://*.replit.dev",
+        f"https://{os.environ.get('REPLIT_DEV_DOMAIN', '')}",
+        f"https://{os.environ.get('REPL_SLUG', '')}.{os.environ.get('REPL_OWNER', '')}.repl.co",
     ],
+    allow_origin_regex=r"https://.*\.replit\.dev",
     allow_methods=["*"],
     allow_headers=["*"],
 )
