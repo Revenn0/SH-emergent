@@ -73,12 +73,19 @@ function LoginPage({ onLogin }) {
       const endpoint = isRegister ? "auth/register" : "auth/login";
       const payload = isRegister ? { username, email, password } : { username, password };
       
+      console.log("Attempting login with endpoint:", endpoint);
       const response = await api.post(endpoint, payload);
+      console.log("Login response:", response.data);
       
       if (response.data.user) {
+        console.log("User data received:", response.data.user);
         onLogin(response.data.user);
+      } else {
+        console.error("No user data in response:", response.data);
+        setError("Invalid response from server");
       }
     } catch (err) {
+      console.error("Login error:", err);
       setError(err.response?.data?.detail || (isRegister ? "Registration failed" : "Login failed"));
     } finally {
       setLoading(false);
