@@ -70,7 +70,7 @@ The system employs a client-server architecture with a Python FastAPI backend an
     - **Login Synchronization**: User login only synchronizes with the already-updated database
     - Simple, reliable architecture with automatic background processing
 - **Alert Management**: Allows viewing, sorting, filtering, and deleting alerts (within the app only), along with features for acknowledging, updating status, adding notes, assigning, and favoriting alerts. Actions column removed for cleaner UI.
-- **Automatic Background Synchronization**: A background task runs every 5 minutes to fetch new emails incrementally (up to 30 emails per sync) and inserts them directly into the database.
+- **Automatic Background Synchronization**: A background task runs every 10 minutes to fetch new emails incrementally (up to 30 emails per sync) and inserts them directly into the database.
 - **Silent Auto-Refresh System**: 
     - **Bike Tracker Page**: Alerts table and stats refresh automatically every 60 seconds without user interaction
     - **Admin Dashboard**: System status refreshes automatically every 60 seconds without loading spinner
@@ -108,10 +108,11 @@ The system employs a client-server architecture with a Python FastAPI backend an
 - **Alert Lifecycle Management**: Supports a workflow for alerts with statuses: New, In Progress, Resolved, Closed.
 
 ### System Design Choices
-- **Backend (Port 8080)**: FastAPI with Neon PostgreSQL, handling email parsing, alert categorization, IMAP client operations, and alert grouping logic.
+- **Backend (Port 8080)**: FastAPI with PostgreSQL, handling email parsing, alert categorization, IMAP client operations, and alert grouping logic.
 - **Frontend (Port 5000)**: React SPA with Tailwind CSS and Lucide React icons, providing a responsive user interface across "Bike Tracker", "Admin Dashboard", and "Service Tracker" views. Uses local storage for session management.
-- **Database**: Neon PostgreSQL (cloud-hosted, managed database service)
+- **Database**: PostgreSQL (Replit-managed database service)
     - Connection string stored securely in `DATABASE_URL` environment variable
+    - Works seamlessly in both development and production environments
     - Setup script available in `neon_database_setup.sql` for initial database configuration
 - **Database Schema**:
     - `users` table: Stores user authentication and Gmail configuration (`id`, `username`, `password_hash`, `email`, `full_name`, `gmail_email`, `gmail_app_password`, `role` [admin/viewer], `sync_interval_minutes` [default 10], `email_limit_per_sync` [default 100], `created_at`, `updated_at`).
