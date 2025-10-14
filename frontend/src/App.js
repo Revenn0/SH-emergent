@@ -502,6 +502,18 @@ function Dashboard({ user, onLogout }) {
     }
   };
 
+  const handleAcknowledgeAlert = async (alertId) => {
+    try {
+      await api.post(`/alerts/${alertId}/acknowledge`, {
+        acknowledged_by: username
+      });
+      await loadAlerts();
+      setShowModal(false);
+    } catch (error) {
+      alert("Failed to acknowledge alert");
+    }
+  };
+
   const handleClearHistory = async () => {
     if (!window.confirm("⚠️ Clear ALL history?\n\nThis will:\n- Delete all alerts\n- Reset sync checkpoint\n- Start from scratch\n\nThis cannot be undone!")) return;
     
@@ -1616,16 +1628,25 @@ function Dashboard({ user, onLogout }) {
             >
               Close
             </button>
-            <button
-              onClick={() => {
-                handleDeleteAlert(selectedAlert.latestAlert.id);
-                setShowModal(false);
-              }}
-              className="flex items-center space-x-2 px-5 py-2.5 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition"
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>Delete Alert</span>
-            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => handleAcknowledgeAlert(selectedAlert.latestAlert.id)}
+                className="flex items-center space-x-2 px-5 py-2.5 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition"
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>Acknowledge</span>
+              </button>
+              <button
+                onClick={() => {
+                  handleDeleteAlert(selectedAlert.latestAlert.id);
+                  setShowModal(false);
+                }}
+                className="flex items-center space-x-2 px-5 py-2.5 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Alert</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
