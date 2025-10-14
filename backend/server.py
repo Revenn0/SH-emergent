@@ -552,13 +552,13 @@ async def startup_db():
             logger.info("Admin user already exists")
     
     background_task = asyncio.create_task(auto_sync_background())
-    logger.info("Background sync task started (5 minute interval, 30 email limit)")
+    logger.info("Background sync task started (1 hour interval, 30 email limit)")
 
 async def auto_sync_background():
-    """Background task to automatically sync alerts every 5 minutes for all users with 30 email limit"""
+    """Background task to automatically sync alerts every 1 hour for all users with 30 email limit"""
     while True:
         try:
-            await asyncio.sleep(300)  # 5 minutes
+            await asyncio.sleep(3600)  # 1 hour
             
             async with db_pool.acquire() as conn:
                 users = await conn.fetch(
@@ -975,7 +975,7 @@ async def manual_sync(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/sync/today")
 async def sync_today_emails(current_user: dict = Depends(get_current_user)):
-    """Sync all emails from today (excluding already read ones)"""
+    """Sync ALL emails from alerts sender (excluding already read ones)"""
     try:
         async with db_pool.acquire() as conn:
             user = await conn.fetchrow(
@@ -986,13 +986,10 @@ async def sync_today_emails(current_user: dict = Depends(get_current_user)):
         if not user or not user.get('gmail_email') or not user.get('gmail_app_password'):
             raise HTTPException(status_code=400, detail="Gmail not configured")
         
-        from datetime import datetime
-        today = datetime.now().strftime("%d-%b-%Y")
-        
         imap = connect_imap(user['gmail_email'], user['gmail_app_password'])
         imap.select("INBOX")
         
-        _, message_numbers = imap.search(None, f'FROM "alerts-no-reply@tracking-update.com" SINCE {today}')
+        _, message_numbers = imap.search(None, 'FROM "alerts-no-reply@tracking-update.com"')
         email_ids = message_numbers[0].split()
         
         async with db_pool.acquire() as conn:
@@ -1047,7 +1044,7 @@ async def sync_today_emails(current_user: dict = Depends(get_current_user)):
             
             return {
                 "success": True,
-                "message": f"Today's sync completed: {total_processed} new emails processed (total today: {len(email_ids)})"
+                "message": f"Full sync completed: {total_processed} new emails processed (total found: {len(email_ids)})"
             }
     except HTTPException:
         raise
