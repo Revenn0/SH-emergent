@@ -70,7 +70,7 @@ function LoginPage({ onLogin }) {
     setError("");
 
     try {
-      const endpoint = isRegister ? "/auth/register" : "/auth/login";
+      const endpoint = isRegister ? "auth/register" : "auth/login";
       const payload = isRegister ? { username, email, password } : { username, password };
       
       const response = await api.post(endpoint, payload);
@@ -264,7 +264,7 @@ function Dashboard({ user, onLogout }) {
 
   const loadCategories = async () => {
     try {
-      const response = await api.get("/alerts/categories");
+      const response = await api.get("alerts/categories");
       setCategories(["All", ...response.data.categories]);
     } catch (error) {
       console.error("Failed to load categories:", error);
@@ -278,7 +278,7 @@ function Dashboard({ user, onLogout }) {
         params.append('category', category);
       }
       
-      const url = `/alerts/stats-only?${params.toString()}`;
+      const url = `alerts/stats-only?${params.toString()}`;
       const response = await api.get(url);
       
       setStats(response.data.stats);
@@ -297,7 +297,7 @@ function Dashboard({ user, onLogout }) {
       params.append('page', 1);
       params.append('limit', limit);
       
-      const url = `/alerts/list?${params.toString()}`;
+      const url = `alerts/list?${params.toString()}`;
       const response = await api.get(url);
       
       setAlerts(response.data.alerts);
@@ -334,7 +334,7 @@ function Dashboard({ user, onLogout }) {
       params.append('page', pageNum);
       params.append('limit', limit);
       
-      const url = `/alerts/list?${params.toString()}`;
+      const url = `alerts/list?${params.toString()}`;
       
       const response = await api.get(url);
       
@@ -478,7 +478,7 @@ function Dashboard({ user, onLogout }) {
   const handleConnectGmail = async (e) => {
     e.preventDefault();
     try {
-      await api.post("/gmail/connect", {
+      await api.post("gmail/connect", {
         email: gmailEmail,
         app_password: gmailPassword
       });
@@ -492,7 +492,7 @@ function Dashboard({ user, onLogout }) {
   const handleDeleteAlert = async (alertId) => {
     if (!window.confirm("Delete this alert?")) return;
     try {
-      await api.delete(`/alerts/${alertId}`);
+      await api.delete(`alerts/${alertId}`);
       await loadAlerts();
     } catch (error) {
       alert("Failed to delete alert");
@@ -503,7 +503,7 @@ function Dashboard({ user, onLogout }) {
     if (!window.confirm("⚠️ Clear ALL history?\n\nThis will:\n- Delete all alerts\n- Reset sync checkpoint\n- Start from scratch\n\nThis cannot be undone!")) return;
     
     try {
-      await api.delete("/alerts/clear-all/history");
+      await api.delete("alerts/clear-all/history");
       await loadAlerts();
       alert("✓ History cleared successfully! System reset.");
     } catch (error) {
@@ -523,7 +523,7 @@ function Dashboard({ user, onLogout }) {
       if (dateFrom) params.append('date_from', dateFrom);
       if (dateTo) params.append('date_to', dateTo);
       
-      const url = `/alerts/export?${params.toString()}`;
+      const url = `alerts/export?${params.toString()}`;
       const response = await api.get(url, { responseType: 'blob' });
       
       // Create download link
@@ -690,7 +690,7 @@ function Dashboard({ user, onLogout }) {
   const loadBikes = useCallback(async () => {
     try {
       setLoadingBikes(true);
-      const response = await api.get("/bikes/list");
+      const response = await api.get("bikes/list");
       setBikes(response.data.bikes || []);
     } catch (error) {
       console.error("Failed to load bikes:", error);
@@ -1124,7 +1124,7 @@ function Dashboard({ user, onLogout }) {
 
     const loadSystemStatus = async () => {
       try {
-        const response = await api.get("/system/status");
+        const response = await api.get("system/status");
         setSystemStatus(response.data);
       } catch (error) {
         console.error("Failed to load system status:", error);
@@ -1136,7 +1136,7 @@ function Dashboard({ user, onLogout }) {
     const loadSystemStatusQuiet = async () => {
       try {
         // Silent refresh: updates data without loading spinner
-        const response = await api.get("/system/status");
+        const response = await api.get("system/status");
         setSystemStatus(response.data);
       } catch (error) {
         console.error("Failed to quiet refresh system status:", error);
@@ -1145,7 +1145,7 @@ function Dashboard({ user, onLogout }) {
 
     const loadSyncConfig = async () => {
       try {
-        const response = await api.get("/sync/config");
+        const response = await api.get("sync/config");
         setSyncConfig(response.data);
         setSyncInterval(response.data.sync_interval_minutes);
         setEmailLimit(response.data.email_limit_per_sync);
@@ -1170,7 +1170,7 @@ function Dashboard({ user, onLogout }) {
 
       setSavingConfig(true);
       try {
-        await api.post("/sync/config", {
+        await api.post("sync/config", {
           sync_interval_minutes: intervalValue,
           email_limit_per_sync: limitValue
         });
@@ -1382,7 +1382,7 @@ function Dashboard({ user, onLogout }) {
               <button
                 onClick={() => {
                   if (window.confirm("Disconnect Gmail?")) {
-                    api.delete("/gmail/disconnect");
+                    api.delete("gmail/disconnect");
                     setGmailConnected(false);
                     setGmailEmail("");
                   }
@@ -1448,7 +1448,7 @@ function Dashboard({ user, onLogout }) {
 
     const openBikeHistoryFromAlert = async () => {
       try {
-        const response = await api.get(`/bikes/by-tracker/${encodeURIComponent(selectedAlert.device)}`);
+        const response = await api.get(`bikes/by-tracker/${encodeURIComponent(selectedAlert.device)}`);
         setSelectedBikeId(response.data.bike_id);
         setShowBikeHistory(true);
         setShowModal(false);
@@ -1658,7 +1658,7 @@ function Dashboard({ user, onLogout }) {
     const loadBikeHistory = async () => {
       try {
         setLoadingHistory(true);
-        const response = await api.get(`/bikes/${selectedBikeId}/history`);
+        const response = await api.get(`bikes/${selectedBikeId}/history`);
         setBikeHistory(response.data);
       } catch (error) {
         console.error("Failed to load bike history:", error);
@@ -1670,7 +1670,7 @@ function Dashboard({ user, onLogout }) {
     const loadBikeHistoryQuiet = async () => {
       try {
         // Silent refresh: updates history without loading spinner and without clearing note field
-        const response = await api.get(`/bikes/${selectedBikeId}/history`);
+        const response = await api.get(`bikes/${selectedBikeId}/history`);
         setBikeHistory(response.data);
       } catch (error) {
         console.error("Failed to quiet refresh bike history:", error);
@@ -1682,7 +1682,7 @@ function Dashboard({ user, onLogout }) {
       
       try {
         setAddingNote(true);
-        await api.post(`/bikes/${selectedBikeId}/notes`, { note: newNote });
+        await api.post(`bikes/${selectedBikeId}/notes`, { note: newNote });
         setNewNote("");
         await loadBikeHistory();
       } catch (error) {
@@ -1843,7 +1843,7 @@ function App() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await api.get("/auth/me");
+        const response = await api.get("auth/me");
         setUser(response.data);
       } catch (error) {
       }
@@ -1858,7 +1858,7 @@ function App() {
 
   const handleLogout = async () => {
     try {
-      await api.post("/auth/logout");
+      await api.post("auth/logout");
     } catch (error) {
     }
     setUser(null);
