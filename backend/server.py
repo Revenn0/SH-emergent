@@ -1142,12 +1142,16 @@ async def list_alerts(
             params.append(category)
         
         if start_date:
+            from datetime import datetime
+            start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
             where_clause += f" AND created_at >= ${len(params) + 1}"
-            params.append(start_date)
+            params.append(start_datetime)
         
         if end_date:
-            where_clause += f" AND created_at <= ${len(params) + 1}"
-            params.append(end_date)
+            from datetime import datetime, timedelta
+            end_datetime = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
+            where_clause += f" AND created_at < ${len(params) + 1}"
+            params.append(end_datetime)
         
         total_count = await conn.fetchval(
             f"SELECT COUNT(*) FROM tracker_alerts {where_clause}",
