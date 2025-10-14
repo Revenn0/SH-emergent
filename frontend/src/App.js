@@ -465,6 +465,9 @@ function Dashboard({ user, onLogout }) {
   const handleRefreshAlerts = async () => {
     setSyncing(true);
     try {
+      // Trigger manual email sync first
+      await api.post("/sync/manual");
+      
       // Always refresh from page 1 to reset lazy loading state
       setPage(1);
       await loadAlerts(selectedCategory !== "All" ? selectedCategory : null, 1, false);

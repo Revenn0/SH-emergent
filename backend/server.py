@@ -947,6 +947,32 @@ async def disconnect_gmail(current_user: dict = Depends(get_current_user)):
     return {"success": True}
 
 
+@api_router.post("/sync/manual")
+async def manual_sync(current_user: dict = Depends(get_current_user)):
+    """Manually trigger email synchronization"""
+    try:
+        async with db_pool.acquire() as conn:
+            user = await conn.fetchrow(
+                "SELECT * FROM users WHERE id = $1",
+                current_user['id']
+            )
+        
+        if not user or not user.get('gmail_email') or not user.get('gmail_app_password'):
+            raise HTTPException(status_code=400, detail="Gmail not configured")
+        
+        new_count = await sync_emails_background(dict(user), limit=100)
+        
+        return {
+            "success": True, 
+            "message": f"Sync completed: {new_count} new emails processed"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Manual sync error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
+
 async def process_email_batch(email_data_list: List[tuple], user_id: str):
     """Process a batch of emails in parallel with individual connections"""
     async def process_single_email(email_id_str, body):
