@@ -478,6 +478,23 @@ function Dashboard({ user, onLogout }) {
     }
   };
 
+  const handleSyncTodayEmails = async () => {
+    setSyncing(true);
+    try {
+      const response = await api.post("/sync/today");
+      alert(response.data.message || "Today's emails synced successfully");
+      
+      // Refresh alerts list
+      setPage(1);
+      await loadAlerts(selectedCategory !== "All" ? selectedCategory : null, 1, false);
+    } catch (error) {
+      console.error("Failed to sync today's emails:", error);
+      alert(error.response?.data?.detail || "Failed to sync today's emails");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const handleConnectGmail = async (e) => {
     e.preventDefault();
     try {
@@ -696,6 +713,14 @@ function Dashboard({ user, onLogout }) {
             >
               <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
               <span>Refresh Alerts</span>
+            </button>
+            <button
+              onClick={handleSyncTodayEmails}
+              disabled={syncing}
+              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            >
+              <Download className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+              <span>Update All Today</span>
             </button>
           </div>
         </div>
