@@ -1176,6 +1176,75 @@ async def list_alerts(
         }
 
 
+@api_router.get("/alerts/export")
+async def export_alerts_csv(
+    category: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user)
+):
+    """Export alerts to CSV with optional category/date filters"""
+    async with db_pool.acquire() as conn:
+        where_clause = "WHERE user_id = $1"
+        params = [current_user['id']]
+        
+        if category and category != "All":
+            where_clause += f" AND alert_type = ${len(params) + 1}"
+            params.append(category)
+        
+        if date_from:
+            where_clause += f" AND created_at >= ${len(params) + 1}::timestamp"
+            params.append(date_from)
+        
+        if date_to:
+            where_clause += f" AND created_at <= ${len(params) + 1}::timestamp + interval '1 day'"
+            params.append(date_to)
+        
+        alerts = await conn.fetch(
+            f"""
+            SELECT * FROM tracker_alerts 
+            {where_clause}
+            ORDER BY created_at DESC
+            """,
+            *params
+        )
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        writer.writerow([
+            'ID', 'Alert Type', 'Alert Time', 'Location', 'Latitude', 'Longitude',
+            'Device Serial', 'Tracker Name', 'Account Name', 'Status', 
+            'Acknowledged', 'Notes', 'Created At'
+        ])
+        
+        for alert in alerts:
+            writer.writerow([
+                alert['id'],
+                alert['alert_type'],
+                alert['alert_time'],
+                alert['location'],
+                alert['latitude'],
+                alert['longitude'],
+                alert['device_serial'],
+                alert['tracker_name'],
+                alert['account_name'],
+                alert.get('status', 'New'),
+                'Yes' if alert.get('acknowledged') else 'No',
+                alert.get('notes', ''),
+                alert['created_at']
+            ])
+        
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=alerts_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            }
+        )
+
+
 @api_router.get("/alerts/stats-only")
 async def get_stats_only(
     category: Optional[str] = Query(None),

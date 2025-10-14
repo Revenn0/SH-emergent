@@ -87,6 +87,15 @@ The system employs a client-server architecture with a Python FastAPI backend an
     - Prevents infinite loading loops with `useCallback` pattern
     - **Performance**: 50 bikes load in <100ms vs previous ~500ms (N+1 query pattern)
 - **Pagination System**: SQL-based pagination with LIMIT/OFFSET for efficient data loading (default 50 items/page, max 200). Includes aggregate queries for statistics without loading full dataset.
+- **Infinite Scroll**: Implemented with IntersectionObserver for seamless alert loading without "Load More" button, improving user experience.
+- **Date Filtering**: Quick filters (Today, Last Week, Last Month, All Time) plus custom date range picker for precise alert filtering by creation date.
+- **CSV Export**: Export filtered alerts to CSV with single-click download:
+    - Backend endpoint `/alerts/export` streams CSV files with all alert data
+    - Respects active category and date range filters
+    - Uses `created_at` (TIMESTAMP) for accurate date filtering with proper casting
+    - Includes comprehensive headers: ID, Alert Type, Alert Time, Location, Coordinates, Device Serial, Tracker Name, Account Name, Status, Acknowledged, Notes, Created At
+    - Automatic filename with timestamp (e.g., `alerts_export_20241014_120530.csv`)
+    - User-scoped for security (only exports current user's alerts)
 - **Data Ordering**: All lists display newest-first (ORDER BY created_at DESC) for alerts, notes, and bike history.
 - **Alert Table**: 6-column layout (Device, Type, Category, Message, Severity, Timestamp) with proper header/cell alignment for clean UI.
 
