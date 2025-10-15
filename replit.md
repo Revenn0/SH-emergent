@@ -38,7 +38,11 @@ The system employs a client-server architecture with a Python FastAPI backend an
     - Automatic token refresh on 401 responses with cookie-based flow
     - All API routes protected via JWT dependency injection from cookies
     - Admin user auto-created on startup (username: `admin`, password: `dimension`)
-    - **Security**: HttpOnly, Secure, SameSite=lax cookies protect against XSS and CSRF attacks
+    - **Environment-aware Cookie Security**: 
+        - **Development** (no APP_ENV set): `secure=False`, `SameSite=lax` (works on HTTP localhost)
+        - **Production** (APP_ENV=production): `secure=True`, `SameSite=none` (works on HTTPS cross-domain)
+        - **CORS**: Dynamic origin allowlist includes `.repl.co`, `.replit.dev`, and `localhost` domains
+        - **Critical**: Set `APP_ENV=production` in deployment settings for proper cookie behavior
     - **Role-Based Access Control (RBAC)**: Multi-level user permissions system:
         - **Admin Role**: Full system access including user management, sync settings, and all features
         - **Viewer Role**: Limited access to Bike Tracker and Bikes view only (read-only operations)
@@ -94,7 +98,7 @@ The system employs a client-server architecture with a Python FastAPI backend an
     - **Performance**: 50 bikes load in <100ms vs previous ~500ms (N+1 query pattern)
 - **Pagination System**: SQL-based pagination with LIMIT/OFFSET for efficient data loading (default 50 items/page, max 200). Includes aggregate queries for statistics without loading full dataset.
 - **Infinite Scroll**: Implemented with IntersectionObserver for seamless alert loading without "Load More" button, improving user experience.
-- **Date Filtering**: Quick filters (Today, Last Week, Last Month, All Time) plus custom date range picker for precise alert filtering by creation date.
+- **Date Filtering**: Quick filters (Today, Last Week, Last Month, All Time) plus single date picker for precise alert filtering by creation date.
 - **CSV Export**: Export filtered alerts to CSV with single-click download:
     - Backend endpoint `/alerts/export` streams CSV files with all alert data
     - Respects active category and date range filters
