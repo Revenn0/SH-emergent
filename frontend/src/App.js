@@ -582,10 +582,11 @@ function Dashboard({ user, onLogout }) {
         params.append('category', selectedCategory);
       }
       
-      // Add date filters
-      const { dateFrom, dateTo } = getDateRange();
-      if (dateFrom) params.append('date_from', dateFrom);
-      if (dateTo) params.append('date_to', dateTo);
+      // Add date filter
+      if (filterDate) {
+        params.append('start_date', filterDate);
+        params.append('end_date', filterDate);
+      }
       
       const url = `/alerts/export?${params.toString()}`;
       const response = await api.get(url, { responseType: 'blob' });
