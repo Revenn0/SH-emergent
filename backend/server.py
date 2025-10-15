@@ -48,8 +48,20 @@ SECRET_KEY = os.environ.get('JWT_SECRET_KEY', secrets.token_urlsafe(32))
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 REFRESH_TOKEN_EXPIRE_DAYS = 7
+IS_PRODUCTION = os.getenv("REPL_ID") is not None  # Replit sets REPL_ID in production
 
 security = HTTPBearer()
+
+def set_auth_cookie(response: Response, key: str, value: str, max_age: int):
+    """Set authentication cookie with appropriate settings for dev/prod"""
+    response.set_cookie(
+        key=key,
+        value=value,
+        httponly=True,
+        secure=True,
+        samesite="none" if IS_PRODUCTION else "lax",
+        max_age=max_age
+    )
 
 ALERT_CATEGORIES = [
     "Crash Detected",
@@ -625,23 +637,8 @@ async def register(request: RegisterRequest, response: Response):
         
         await store_refresh_token(user_id, refresh_token)
         
-        response.set_cookie(
-            key="access_token",
-            value=access_token,
-            httponly=True,
-            secure=True,
-            samesite="lax",
-            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
-        )
-        
-        response.set_cookie(
-            key="refresh_token",
-            value=refresh_token,
-            httponly=True,
-            secure=True,
-            samesite="lax",
-            max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
-        )
+        set_auth_cookie(response, "access_token", access_token, ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+        set_auth_cookie(response, "refresh_token", refresh_token, REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60)
         
         logger.info(f"New user registered: {request.username}")
         
@@ -677,23 +674,8 @@ async def login(request: LoginRequest, response: Response):
         
         await store_refresh_token(user['id'], refresh_token)
         
-        response.set_cookie(
-            key="access_token",
-            value=access_token,
-            httponly=True,
-            secure=True,
-            samesite="lax",
-            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
-        )
-        
-        response.set_cookie(
-            key="refresh_token",
-            value=refresh_token,
-            httponly=True,
-            secure=True,
-            samesite="lax",
-            max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
-        )
+        set_auth_cookie(response, "access_token", access_token, ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+        set_auth_cookie(response, "refresh_token", refresh_token, REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60)
         
         logger.info(f"User logged in: {request.username}")
         
@@ -741,23 +723,8 @@ async def refresh_token_endpoint(req: Request, response: Response):
     
     await store_refresh_token(user_id, new_refresh_token)
     
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60
-    )
-    
-    response.set_cookie(
-        key="refresh_token",
-        value=new_refresh_token,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
-    )
+    set_auth_cookie(response, "access_token", access_token, ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+    set_auth_cookie(response, "refresh_token", new_refresh_token, REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60)
     
     user_dict = dict(user)
     return {
@@ -789,23 +756,8 @@ async def logout(req: Request, response: Response):
                 hash_token(refresh_token)
             )
     
-    response.set_cookie(
-        key="access_token",
-        value="",
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        max_age=0
-    )
-    
-    response.set_cookie(
-        key="refresh_token",
-        value="",
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        max_age=0
-    )
+    set_auth_cookie(response, "access_token", "", 0)
+    set_auth_cookie(response, "refresh_token", "", 0)
     
     return {"success": True, "message": "Logged out successfully"}
 
@@ -1942,16 +1894,24 @@ app.include_router(api_router)
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+def is_valid_origin(origin: str) -> bool:
+    """Validate if origin is allowed"""
+    allowed_patterns = [
+        "http://localhost",
+        "http://127.0.0.1",
+        ".repl.co",
+        ".replit.dev"
+    ]
+    return any(pattern in origin for pattern in allowed_patterns)
+
+class DynamicCORSMiddleware(CORSMiddleware):
+    def is_allowed_origin(self, origin: str) -> bool:
+        return is_valid_origin(origin)
+
 app.add_middleware(
-    CORSMiddleware,
+    DynamicCORSMiddleware,
     allow_credentials=True,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:5000",
-        "http://127.0.0.1:5000",
-        "https://3ccd770e-286e-4b10-bf81-649b35418e6f-00-1akfuqkm3jdil.spock.replit.dev",
-        "https://3ccd770e-286e-4b10-bf81-649b35418e6f-00-1akfuqkm3jdil.spock.replit.dev:5000",
-    ],
+    allow_origins=["*"],  # Will be validated by is_allowed_origin
     allow_methods=["*"],
     allow_headers=["*"],
 )

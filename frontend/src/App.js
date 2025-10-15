@@ -206,8 +206,7 @@ function Dashboard({ user, onLogout }) {
   const [darkMode, setDarkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("priority");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [filterDate, setFilterDate] = useState("");
   
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20); // Reduced for lazy loading
@@ -337,11 +336,9 @@ function Dashboard({ user, onLogout }) {
       params.append('page', pageNum);
       params.append('limit', limit);
       
-      if (startDate) {
-        params.append('start_date', startDate);
-      }
-      if (endDate) {
-        params.append('end_date', endDate);
+      if (filterDate) {
+        params.append('start_date', filterDate);
+        params.append('end_date', filterDate);
       }
       
       const url = `/alerts/list?${params.toString()}`;
@@ -1035,22 +1032,21 @@ function Dashboard({ user, onLogout }) {
                   )}
                 </div>
                 <div className="flex items-center space-x-2">
-                  <label className="text-xs font-medium text-gray-600">From:</label>
+                  <label className="text-xs font-medium text-gray-600">Filter by Date:</label>
                   <input
                     type="date"
-                    value={startDate}
-                    onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
-                    className="px-2 py-1 text-xs border border-gray-300 rounded-md"
+                    value={filterDate}
+                    onChange={(e) => { setFilterDate(e.target.value); setPage(1); }}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
                   />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <label className="text-xs font-medium text-gray-600">To:</label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
-                    className="px-2 py-1 text-xs border border-gray-300 rounded-md"
-                  />
+                  {filterDate && (
+                    <button
+                      onClick={() => { setFilterDate(""); setPage(1); }}
+                      className="text-xs text-gray-500 hover:text-gray-700 underline"
+                    >
+                      Clear
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="flex items-center space-x-4">
