@@ -1902,19 +1902,12 @@ allowed_origins = [
     "http://127.0.0.1:3000",
 ]
 
-# Add Replit domains dynamically
-replit_domains = os.getenv("REPLIT_DOMAINS", "").split(",")
-for domain in replit_domains:
-    if domain.strip():
-        allowed_origins.append(f"https://{domain.strip()}")
-
-# Add current Replit dev URL if available
-if os.getenv("REPL_SLUG"):
-    repl_slug = os.getenv("REPL_SLUG")
-    repl_owner = os.getenv("REPL_OWNER", "")
-    if repl_owner:
-        allowed_origins.append(f"https://{repl_slug}.{repl_owner}.repl.co")
-        allowed_origins.append(f"https://{repl_slug}-{repl_owner}.replit.dev")
+# Add custom allowed origins from environment variable
+# Format: ALLOWED_ORIGINS=https://yourdomain.com,https://app.vercel.app
+custom_origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
+for origin in custom_origins:
+    if origin.strip():
+        allowed_origins.append(origin.strip())
 
 app.add_middleware(
     CORSMiddleware,
