@@ -56,6 +56,37 @@ const formatUKTimestamp = (dateString) => {
   }
 };
 
+// Crash Alert Notification Component
+function CrashNotification({ crashAlerts, onDismiss }) {
+  if (crashAlerts.length === 0) return null;
+
+  return (
+    <div className="fixed top-20 right-6 z-50 space-y-3">
+      {crashAlerts.map((crash, index) => (
+        <div
+          key={index}
+          className="bg-red-600 text-white px-6 py-4 rounded-lg shadow-2xl border-2 border-red-700 animate-pulse"
+        >
+          <div className="flex items-center space-x-3">
+            <AlertTriangle className="w-6 h-6" />
+            <div className="flex-1">
+              <div className="font-bold text-lg">CRASH DETECTED!</div>
+              <div className="text-sm mt-1">{crash.device}</div>
+              <div className="text-xs opacity-90 mt-1">{formatUKTimestamp(crash.timestamp)}</div>
+            </div>
+            <button
+              onClick={() => onDismiss(crash.device)}
+              className="text-white hover:text-gray-200 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function LoginPage({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -180,6 +211,7 @@ function Dashboard({ user, onLogout }) {
   const [currentPage, setCurrentPage] = useState("dashboard");
   const [alerts, setAlerts] = useState([]);
   const [groupedAlerts, setGroupedAlerts] = useState([]);
+  const [crashAlerts, setCrashAlerts] = useState([]); // Store crash detected alerts
   const [stats, setStats] = useState({
     total: 0,
     unread: 0,
@@ -419,23 +451,41 @@ function Dashboard({ user, onLogout }) {
       }
     });
 
+    // Detect crash alerts and store them
+    const crashDetected = [];
+    
     Object.values(grouped).forEach(group => {
-      const alertTypes = new Set(group.alerts.map(a => a.alert_type));
+      const alertTypes = group.alerts.map(a => a.alert_type);
       
-      const hasHeavyImpact = Array.from(alertTypes).some(t => t && t.includes("Crash detect"));
-      const hasOverTurn = alertTypes.has("Over-turn");
-      const hasTamperAlert = alertTypes.has("Tamper Alert");
-      const hasNoCommunication = Array.from(alertTypes).some(t => t && t.includes("No Communication"));
+      // Count specific alert types
+      const overTurnCount = alertTypes.filter(t => t === "Over-turn").length;
+      const heavyImpactCount = alertTypes.filter(t => t === "Heavy Impact").length;
       
-      if (hasHeavyImpact && hasOverTurn && hasTamperAlert) {
+      // Crash detect ONLY when: 1 Over-turn + 1 Heavy Impact (not 2 Over-turn)
+      const isCrashDetect = overTurnCount >= 1 && heavyImpactCount >= 1;
+      
+      if (isCrashDetect) {
         group.severity = "crash-detected";
         group.displayName = "Crash Detected";
-      } else if (hasOverTurn || hasHeavyImpact || hasNoCommunication) {
+        crashDetected.push({
+          device: group.device,
+          timestamp: group.latestAlert.created_at
+        });
+      } else if (overTurnCount > 0 || heavyImpactCount > 0) {
         group.severity = "high";
       } else {
         group.severity = "normal";
       }
     });
+    
+    // Update crash alerts if there are new ones
+    if (crashDetected.length > 0) {
+      setCrashAlerts(prev => {
+        const existing = new Set(prev.map(a => a.device));
+        const newCrashes = crashDetected.filter(c => !existing.has(c.device));
+        return [...prev, ...newCrashes];
+      });
+    }
 
     const groupedArray = Object.values(grouped);
     
@@ -610,6 +660,10 @@ function Dashboard({ user, onLogout }) {
   const openAlertModal = (group) => {
     setSelectedAlert(group);
     setShowModal(true);
+  };
+
+  const dismissCrashAlert = (device) => {
+    setCrashAlerts(prev => prev.filter(c => c.device !== device));
   };
 
   const Sidebar = () => (
@@ -1933,6 +1987,7 @@ function Dashboard({ user, onLogout }) {
           {currentPage === "settings" && <SettingsPage />}
         </main>
       </div>
+      <CrashNotification crashAlerts={crashAlerts} onDismiss={dismissCrashAlert} />
       <AlertModal />
       <BikeHistoryModal />
     </div>

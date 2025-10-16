@@ -65,7 +65,7 @@ def set_auth_cookie(response: Response, key: str, value: str, max_age: int):
 
 ALERT_CATEGORIES = [
     "Crash Detected",
-    "Crash detect",
+    "Heavy Impact",
     "Light Sensor",
     "Out Of Country",
     "No Communication",
@@ -343,8 +343,9 @@ def categorize_alert(alert_type: str) -> str:
     """Categorize alert based on type"""
     alert_lower = alert_type.lower()
     
+    # Heavy Impact alone is NOT crash detect - needs Over-turn too (checked later)
     if "heavy impact" in alert_lower:
-        return "Crash detect"
+        return "Heavy Impact"
     elif "light sensor" in alert_lower:
         return "Light Sensor"
     elif "out of country" in alert_lower:
