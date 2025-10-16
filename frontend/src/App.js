@@ -8,8 +8,11 @@ import {
   MessageSquare, CheckCircle2, RefreshCw, Loader2, Download
 } from "lucide-react";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8080';
 const API = `${BACKEND_URL}/api`;
+
+console.log('BACKEND_URL:', BACKEND_URL);
+console.log('API URL:', API);
 
 const api = axios.create({
   baseURL: API,
@@ -104,12 +107,19 @@ function LoginPage({ onLogin }) {
       const endpoint = isRegister ? "/auth/register" : "/auth/login";
       const payload = isRegister ? { username, email, password } : { username, password };
       
+      console.log("Login request:", endpoint, payload);
       const response = await api.post(endpoint, payload);
+      console.log("Login response:", response.data);
       
       if (response.data.user) {
+        console.log("Calling onLogin with:", response.data.user);
         onLogin(response.data.user);
+      } else {
+        console.error("No user in response:", response.data);
+        setError("Login response missing user data");
       }
     } catch (err) {
+      console.error("Login error:", err);
       setError(err.response?.data?.detail || (isRegister ? "Registration failed" : "Login failed"));
     } finally {
       setLoading(false);
