@@ -1904,6 +1904,12 @@ allowed_origins = [
     "http://127.0.0.1:3000",
 ]
 
+# Add Replit URL if running on Replit
+replit_domain = os.getenv("REPLIT_DEV_DOMAIN")
+if replit_domain:
+    allowed_origins.append(f"https://{replit_domain}")
+    logger.info(f"Added Replit domain to CORS: https://{replit_domain}")
+
 # Add custom allowed origins from environment variable
 # Format: ALLOWED_ORIGINS=https://yourdomain.com,https://app.vercel.app
 custom_origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
