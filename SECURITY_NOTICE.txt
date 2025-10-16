@@ -1,0 +1,34 @@
+════════════════════════════════════════════════════════════════
+🚨 AVISO DE SEGURANÇA - LEIA ESTE ARQUIVO
+════════════════════════════════════════════════════════════════
+
+SUAS CREDENCIAIS FORAM EXPOSTAS NO HISTÓRICO DO GIT
+
+Arquivos .env com suas chaves reais foram commitados em:
+- Commit: f93cfd1 "Auto-generated changes"
+- Commit: 3d0d8c9 "auto-commit for 9ac679dd..."
+
+CREDENCIAIS EXPOSTAS:
+✓ GEMINI_API_KEY: AIzaSyDWpJiSr3Y8J4b-R6IlKeRyuK3FJNHB280
+✓ JWT_SECRET_KEY: 9TdxJ9BZTeN07eZKloPIW20gyxNKBWpIx6mW1Ncoc7Q
+✓ DATABASE_URL: Credenciais completas do Neon
+
+════════════════════════════════════════════════════════════════
+AÇÕES NECESSÁRIAS:
+════════════════════════════════════════════════════════════════
+
+1. ROTACIONE O GEMINI API KEY:
+   https://makersuite.google.com/app/apikey
+
+2. GERE NOVO JWT SECRET:
+   python -c "import secrets; print(secrets.token_urlsafe(32))"
+
+3. SE O REPOSITÓRIO É PÚBLICO:
+   Considere deletar e recriar o repositório
+
+ARQUIVOS AGORA PROTEGIDOS:
+✓ .gitignore configurado para ignorar *.env
+✓ .env.example criado com placeholders
+✓ DEPLOYMENT.md com guia de segurança
+
+════════════════════════════════════════════════════════════════
