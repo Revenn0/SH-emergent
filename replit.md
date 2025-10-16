@@ -45,14 +45,28 @@ The system employs a client-server architecture with a Python FastAPI backend an
 ### System Design Choices
 - **Backend**: FastAPI (Port 8080) with Neon PostgreSQL.
 - **Frontend**: React SPA (Port 5000) with Tailwind CSS and Lucide React icons.
-- **Database**: Neon PostgreSQL, with a defined schema for `users`, `tracker_alerts`, `bikes`, `bike_notes`, `sync_checkpoints`, and `refresh_tokens` tables.
-- **Deployment**: Configured for VM (always-on) deployment.
+- **Database**: Neon PostgreSQL (direct connection), with a defined schema for `users`, `tracker_alerts`, `bikes`, `bike_notes`, `sync_checkpoints`, and `refresh_tokens` tables.
+- **Deployment**: Platform-independent, can be deployed to Vercel, Railway, Render, AWS, or any hosting service that supports Python (backend) and Node.js (frontend).
+- **Configuration**: Uses generic environment variables (`ALLOWED_ORIGINS`, `DATABASE_URL`, `APP_ENV`) instead of platform-specific variables.
 
 ## External Dependencies
 - **Email Service**: Gmail IMAP (for `alerts-no-reply@tracking-update.com`)
-- **Database**: Neon PostgreSQL
+- **Database**: Neon PostgreSQL (direct connection via `DATABASE_URL`)
 - **AI**: Google Gemini (optional, for alert categorization)
 - **Mapping**: Google Maps
 - **Frontend Framework**: React
 - **Styling**: Tailwind CSS
 - **Icons**: Lucide React icons
+
+## Recent Changes (October 2025)
+### Platform Independence Migration
+- **Removed Replit-specific dependencies**: System no longer depends on `REPLIT_DOMAINS`, `REPL_SLUG`, or `REPL_OWNER` environment variables
+- **Direct Neon PostgreSQL connection**: Using direct connection string instead of Replit database wrapper
+- **Generic CORS configuration**: Uses `ALLOWED_ORIGINS` environment variable for cross-origin setup
+- **Portable deployment**: Can now be deployed to any hosting service (Vercel, Railway, Render, AWS, etc.)
+- **Environment variables**:
+  - `DATABASE_URL`: PostgreSQL connection string (Neon)
+  - `ALLOWED_ORIGINS`: Comma-separated list of allowed frontend URLs for CORS
+  - `APP_ENV`: Set to "production" for secure cookies in deployed environments
+  - `GEMINI_API_KEY`: Google Gemini API key for AI categorization
+  - `JWT_SECRET_KEY`: Secret key for JWT token generation
