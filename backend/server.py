@@ -1895,24 +1895,31 @@ app.include_router(api_router)
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-def is_valid_origin(origin: str) -> bool:
-    """Validate if origin is allowed"""
-    allowed_patterns = [
-        "http://localhost",
-        "http://127.0.0.1",
-        ".repl.co",
-        ".replit.dev"
-    ]
-    return any(pattern in origin for pattern in allowed_patterns)
+allowed_origins = [
+    "http://localhost:5000",
+    "http://127.0.0.1:5000",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
 
-class DynamicCORSMiddleware(CORSMiddleware):
-    def is_allowed_origin(self, origin: str) -> bool:
-        return is_valid_origin(origin)
+# Add Replit domains dynamically
+replit_domains = os.getenv("REPLIT_DOMAINS", "").split(",")
+for domain in replit_domains:
+    if domain.strip():
+        allowed_origins.append(f"https://{domain.strip()}")
+
+# Add current Replit dev URL if available
+if os.getenv("REPL_SLUG"):
+    repl_slug = os.getenv("REPL_SLUG")
+    repl_owner = os.getenv("REPL_OWNER", "")
+    if repl_owner:
+        allowed_origins.append(f"https://{repl_slug}.{repl_owner}.repl.co")
+        allowed_origins.append(f"https://{repl_slug}-{repl_owner}.replit.dev")
 
 app.add_middleware(
-    DynamicCORSMiddleware,
+    CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],  # Will be validated by is_allowed_origin
+    allow_origins=allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

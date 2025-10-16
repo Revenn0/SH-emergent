@@ -331,6 +331,12 @@ function Dashboard({ user, onLogout }) {
       params.append('page', 1);
       params.append('limit', limit);
       
+      // INCLUDE DATE FILTER in quiet refresh
+      if (filterDate) {
+        params.append('start_date', filterDate);
+        params.append('end_date', filterDate);
+      }
+      
       const url = `/alerts/list?${params.toString()}`;
       const response = await api.get(url);
       
