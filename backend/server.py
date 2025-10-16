@@ -48,18 +48,20 @@ SECRET_KEY = os.environ.get('JWT_SECRET_KEY', secrets.token_urlsafe(32))
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 REFRESH_TOKEN_EXPIRE_DAYS = 7
-IS_PRODUCTION = os.getenv("APP_ENV") == "production"  # Set APP_ENV=production in deploy settings
+IS_PRODUCTION = os.getenv("APP_ENV") == "production"
+IS_REPLIT = os.getenv("REPLIT_DEV_DOMAIN") is not None
+IS_HTTPS = IS_PRODUCTION or IS_REPLIT
 
 security = HTTPBearer()
 
 def set_auth_cookie(response: Response, key: str, value: str, max_age: int):
-    """Set authentication cookie with appropriate settings for dev/prod"""
+    """Set authentication cookie with appropriate settings for dev/prod/replit"""
     response.set_cookie(
         key=key,
         value=value,
         httponly=True,
-        secure=IS_PRODUCTION,  # Only secure in production (HTTPS)
-        samesite="none" if IS_PRODUCTION else "lax",
+        secure=IS_HTTPS,
+        samesite="none" if IS_HTTPS else "lax",
         max_age=max_age
     )
 

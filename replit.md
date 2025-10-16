@@ -59,14 +59,17 @@ The system employs a client-server architecture with a Python FastAPI backend an
 - **Icons**: Lucide React icons
 
 ## Recent Changes (October 2025)
-### Platform Independence Migration
-- **Removed Replit-specific dependencies**: System no longer depends on `REPLIT_DOMAINS`, `REPL_SLUG`, or `REPL_OWNER` environment variables
+### Platform Independence Migration & Replit Integration (Oct 16, 2025)
 - **Direct Neon PostgreSQL connection**: Using direct connection string instead of Replit database wrapper
-- **Generic CORS configuration**: Uses `ALLOWED_ORIGINS` environment variable for cross-origin setup
-- **Portable deployment**: Can now be deployed to any hosting service (Vercel, Railway, Render, AWS, etc.)
+- **Smart Cookie Configuration**: Automatically detects Replit environment and sets secure cookies (SameSite=None) for HTTPS
+- **Environment Detection**: Backend automatically adapts to Replit (HTTPS) vs local development (HTTP)
+- **Frontend URL Configuration**: Automatically uses correct backend URL for Replit deployment
+- **Database Schema**: Single `database_schema.sql` file with IF NOT EXISTS for all tables
+- **Portable deployment**: Can be deployed to any hosting service (Vercel, Railway, Render, AWS, etc.)
 - **Environment variables**:
   - `DATABASE_URL`: PostgreSQL connection string (Neon)
-  - `ALLOWED_ORIGINS`: Comma-separated list of allowed frontend URLs for CORS
+  - `ALLOWED_ORIGINS`: Comma-separated list of allowed frontend URLs for CORS (optional)
   - `APP_ENV`: Set to "production" for secure cookies in deployed environments
   - `GEMINI_API_KEY`: Google Gemini API key for AI categorization
   - `JWT_SECRET_KEY`: Secret key for JWT token generation
+  - `REACT_APP_BACKEND_URL`: Frontend backend URL (auto-detects Replit URL)
