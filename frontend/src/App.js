@@ -986,17 +986,46 @@ function Dashboard({ user, onLogout }) {
 
   // Bike History Modal Component
   const BikeHistoryModal = () => {
+    const [newNote, setNewNote] = useState("");
+    const [addingNote, setAddingNote] = useState(false);
+    
     if (!showBikeHistoryModal || !selectedBike) return null;
+
+    const handleAddNote = async () => {
+      if (!newNote.trim()) return;
+      
+      setAddingNote(true);
+      try {
+        await api.post(`/bikes/${selectedBike.id}/notes`, { note: newNote });
+        setNewNote("");
+        // Reload history
+        const response = await api.get(`/bikes/${selectedBike.id}/history`);
+        setBikeHistory({
+          alerts: response.data.alerts || [],
+          notes: response.data.notes || []
+        });
+      } catch (error) {
+        console.error("Failed to add note:", error);
+        alert("Failed to add note");
+      } finally {
+        setAddingNote(false);
+      }
+    };
+    
+    // Sort alerts by created_at DESC (newest first)
+    const sortedAlerts = [...(bikeHistory.alerts || [])].sort((a, b) => 
+      new Date(b.created_at) - new Date(a.created_at)
+    );
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div className="bg-white dark:bg-gray-800 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-          <div className="p-6 border-b border-gray-200 dark:border-gray-700 dark:border-gray-700 flex items-center justify-between">
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white dark:text-white">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                 {selectedBike.tracker_name}
               </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-300 dark:text-gray-400 mt-1">Alert History</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Alert History (Newest First)</p>
             </div>
             <button
               onClick={() => {
@@ -1004,9 +1033,9 @@ function Dashboard({ user, onLogout }) {
                 setSelectedBike(null);
                 setBikeHistory({ alerts: [], notes: [] });
               }}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 dark:bg-gray-700 dark:hover:bg-gray-700 rounded-lg transition"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
             >
-              <X className="w-6 h-6 text-gray-600 dark:text-gray-300 dark:text-gray-400" />
+              <X className="w-6 h-6 text-gray-600 dark:text-gray-400" />
             </button>
           </div>
 
@@ -1017,38 +1046,61 @@ function Dashboard({ user, onLogout }) {
               </div>
             ) : (
               <div className="space-y-6">
+                {/* Add Note Section */}
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Add Note</h3>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleAddNote()}
+                      placeholder="Type your note here..."
+                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                      disabled={addingNote}
+                    />
+                    <button
+                      onClick={handleAddNote}
+                      disabled={addingNote || !newNote.trim()}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                    >
+                      {addingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Add'}
+                    </button>
+                  </div>
+                </div>
+                
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white dark:text-white mb-4">
-                    Recent Alerts ({bikeHistory.alerts.length})
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                    Recent Alerts ({sortedAlerts.length})
                   </h3>
                   
-                  {bikeHistory.alerts.length === 0 ? (
-                    <p className="text-gray-500 dark:text-gray-400 dark:text-gray-400 text-center py-8">No alerts found</p>
+                  {sortedAlerts.length === 0 ? (
+                    <p className="text-gray-500 dark:text-gray-400 text-center py-8">No alerts found</p>
                   ) : (
                     <div className="space-y-3">
-                      {bikeHistory.alerts.map((alert, index) => (
+                      {sortedAlerts.map((alert, index) => (
                         <div
                           key={index}
-                          className="bg-gray-50 dark:bg-gray-900 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700 dark:border-gray-700"
+                          className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-700"
                         >
                           <div className="flex items-start justify-between mb-2">
                             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                               {alert.alert_type}
                             </span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-400">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
                               {formatUKTimestamp(alert.created_at)}
                             </span>
                           </div>
                           
                           {alert.location && (
-                            <div className="flex items-start space-x-2 text-sm text-gray-600 dark:text-gray-300 dark:text-gray-300">
+                            <div className="flex items-start space-x-2 text-sm text-gray-600 dark:text-gray-300">
                               <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
                               <span>{alert.location}</span>
                             </div>
                           )}
                           
                           {alert.notes && (
-                            <div className="mt-2 text-sm text-gray-600 dark:text-gray-300 dark:text-gray-300 bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded">
+                            <div className="mt-2 text-sm text-gray-600 dark:text-gray-300 bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded">
                               <strong>Notes:</strong> {alert.notes}
                             </div>
                           )}
@@ -1062,7 +1114,7 @@ function Dashboard({ user, onLogout }) {
                               {alert.acknowledged ? '✓ Acknowledged' : 'Pending'}
                             </span>
                             {alert.status && (
-                              <span className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-400">
+                              <span className="text-xs text-gray-500 dark:text-gray-400">
                                 Status: {alert.status}
                               </span>
                             )}
@@ -1075,7 +1127,7 @@ function Dashboard({ user, onLogout }) {
 
                 {bikeHistory.notes && bikeHistory.notes.length > 0 && (
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white dark:text-white mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                       Notes ({bikeHistory.notes.length})
                     </h3>
                     <div className="space-y-2">
@@ -1084,8 +1136,8 @@ function Dashboard({ user, onLogout }) {
                           key={index}
                           className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 border border-yellow-200 dark:border-yellow-800"
                         >
-                          <p className="text-sm text-gray-700 dark:text-gray-300 dark:text-gray-300">{note.note}</p>
-                          <span className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-400 mt-1 block">
+                          <p className="text-sm text-gray-700 dark:text-gray-300">{note.note}</p>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 mt-1 block">
                             {formatUKTimestamp(note.created_at)}
                           </span>
                         </div>
