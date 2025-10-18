@@ -945,7 +945,7 @@ function Dashboard({ user, onLogout }) {
             {filteredBikes.map((bike) => (
               <div
                 key={bike.id}
-                onClick={() => openBikeHistory(bike.id)}
+                onClick={() => openBikeHistory(bike.id, bike.tracker_name)}
                 className="bg-white rounded-lg border border-gray-200 p-6 hover:border-gray-400 cursor-pointer transition"
               >
                 <div className="flex items-center justify-between mb-4">
