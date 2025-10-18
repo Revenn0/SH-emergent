@@ -822,6 +822,80 @@ async def list_users(admin_user: dict = Depends(get_admin_user)):
         return {"users": [dict(u) for u in users]}
 
 
+@api_router.put("/users/{user_id}")
+async def update_user(user_id: str, request: dict, admin_user: dict = Depends(get_admin_user)):
+    """Update user (admin only)"""
+    username = request.get('username')
+    email = request.get('email')
+    role = request.get('role')
+    password = request.get('password')
+    
+    if role and role not in ['admin', 'viewer']:
+        raise HTTPException(status_code=400, detail="Role must be 'admin' or 'viewer'")
+    
+    async with db_pool.acquire() as conn:
+        # Check if user exists
+        user = await conn.fetchrow("SELECT id FROM users WHERE id = $1", user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Build update query dynamically
+        updates = []
+        params = []
+        param_count = 1
+        
+        if username:
+            # Check if username already taken by another user
+            existing = await conn.fetchval(
+                "SELECT id FROM users WHERE username = $1 AND id != $2",
+                username, user_id
+            )
+            if existing:
+                raise HTTPException(status_code=400, detail="Username already exists")
+            updates.append(f"username = ${param_count}")
+            params.append(username)
+            param_count += 1
+        
+        if email:
+            updates.append(f"email = ${param_count}")
+            params.append(email)
+            param_count += 1
+        
+        if role:
+            updates.append(f"role = ${param_count}")
+            params.append(role)
+            param_count += 1
+        
+        if password:
+            password_hash = pwd_context.hash(password)
+            updates.append(f"password_hash = ${param_count}")
+            params.append(password_hash)
+            param_count += 1
+        
+        if updates:
+            query = f"UPDATE users SET {', '.join(updates)} WHERE id = ${param_count}"
+            params.append(user_id)
+            await conn.execute(query, *params)
+        
+        return {"success": True, "message": "User updated successfully"}
+
+
+@api_router.delete("/users/{user_id}")
+async def delete_user(user_id: str, admin_user: dict = Depends(get_admin_user)):
+    """Delete user (admin only)"""
+    # Prevent deleting self
+    if user_id == admin_user['id']:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    
+    async with db_pool.acquire() as conn:
+        result = await conn.execute("DELETE FROM users WHERE id = $1", user_id)
+        
+        if result == "DELETE 0":
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        return {"success": True, "message": "User deleted successfully"}
+
+
 def connect_imap(email_addr: str, app_password: str):
     """Connect to Gmail via IMAP"""
     try:
