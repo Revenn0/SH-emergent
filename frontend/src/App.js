@@ -804,20 +804,6 @@ function Dashboard({ user, onLogout }) {
           </div>
           <div className="flex items-center space-x-3">
             <button
-              onClick={toggleDarkMode}
-              className="p-2 hover:bg-gray-100 rounded-md transition"
-              title={darkMode ? "Light mode" : "Dark mode"}
-            >
-              {darkMode ? <Sun className="w-5 h-5 text-gray-600" /> : <Moon className="w-5 h-5 text-gray-600" />}
-            </button>
-            <button
-              onClick={handleExportCSV}
-              className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition text-sm"
-            >
-              <Download className="w-4 h-4" />
-              <span>Export CSV</span>
-            </button>
-            <button
               onClick={handleRefreshAlerts}
               disabled={syncing}
               className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
