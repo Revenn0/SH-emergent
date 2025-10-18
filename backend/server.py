@@ -820,6 +820,152 @@ async def manual_sync(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
 
 
+@api_router.post("/sync/progressive")
+async def sync_progressive(current_user: dict = Depends(get_current_user)):
+    """Sync emails progressively - 10 at a time with progress tracking"""
+    try:
+        user = await db.users.find_one({"id": current_user['id']})
+        
+        if not user or not user.get('gmail_email') or not user.get('gmail_app_password'):
+            raise HTTPException(status_code=400, detail="Gmail not configured")
+        
+        imap = connect_imap(user['gmail_email'], user['gmail_app_password'])
+        imap.select("INBOX")
+        
+        _, message_numbers = imap.search(None, 'FROM "alerts-no-reply@tracking-update.com"')
+        email_ids = message_numbers[0].split()
+        total_emails = len(email_ids)
+        
+        existing_ids = await db.tracker_alerts.find(
+            {"user_id": user['id']},
+            {"email_id": 1}
+        ).to_list(None)
+        existing_set = {doc['email_id'] for doc in existing_ids}
+        
+        # Process only first 10 new emails
+        email_data_list = []
+        processed_count = 0
+        
+        for email_id in email_ids:
+            email_id_str = email_id.decode()
+            
+            if email_id_str in existing_set:
+                processed_count += 1
+                continue
+            
+            if len(email_data_list) >= 10:
+                break
+            
+            try:
+                _, msg_data = imap.fetch(email_id, "(RFC822)")
+                email_body = msg_data[0][1]
+                msg = email.message_from_bytes(email_body)
+                body = get_email_body(msg)
+                email_data_list.append((email_id_str, body))
+            except Exception as e:
+                logger.error(f"Error fetching email {email_id_str}: {str(e)}")
+        
+        imap.logout()
+        
+        new_processed = 0
+        if email_data_list:
+            new_processed = await process_email_batch(email_data_list, user['id'])
+            processed_count += new_processed
+        
+        remaining = total_emails - processed_count
+        
+        return {
+            "success": True,
+            "total": total_emails,
+            "processed": processed_count,
+            "remaining": remaining,
+            "batch_size": len(email_data_list),
+            "new_alerts": new_processed,
+            "completed": remaining == 0
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Progressive sync error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Progressive sync failed: {str(e)}")
+
+
+@api_router.post("/sync/today")
+async def sync_today_emails(current_user: dict = Depends(get_current_user)):
+    """Sync ALL emails from alerts sender (excluding already read ones)"""
+    try:
+        user = await db.users.find_one({"id": current_user['id']})
+        
+        if not user or not user.get('gmail_email') or not user.get('gmail_app_password'):
+            raise HTTPException(status_code=400, detail="Gmail not configured")
+        
+        imap = connect_imap(user['gmail_email'], user['gmail_app_password'])
+        imap.select("INBOX")
+        
+        _, message_numbers = imap.search(None, 'FROM "alerts-no-reply@tracking-update.com"')
+        email_ids = message_numbers[0].split()
+        
+        existing_ids = await db.tracker_alerts.find(
+            {"user_id": user['id']},
+            {"email_id": 1}
+        ).to_list(None)
+        existing_set = {doc['email_id'] for doc in existing_ids}
+        
+        email_data_list = []
+        for email_id in email_ids:
+            email_id_str = email_id.decode()
+            
+            if email_id_str in existing_set:
+                continue
+            
+            try:
+                _, msg_data = imap.fetch(email_id, "(RFC822)")
+                email_body = msg_data[0][1]
+                msg = email.message_from_bytes(email_body)
+                body = get_email_body(msg)
+                email_data_list.append((email_id_str, body))
+            except Exception as e:
+                logger.error(f"Error fetching email {email_id_str}: {str(e)}")
+        
+        imap.logout()
+        
+        if not email_data_list:
+            return {
+                "success": True,
+                "message": f"No new emails from today ({len(email_ids)} already processed)"
+            }
+        
+        batch_size = 10
+        total_processed = 0
+        
+        for i in range(0, len(email_data_list), batch_size):
+            batch = email_data_list[i:i + batch_size]
+            processed = await process_email_batch(batch, user['id'])
+            total_processed += processed
+        
+        if email_data_list and email_ids:
+            await db.sync_checkpoints.update_one(
+                {"user_id": user['id']},
+                {
+                    "$set": {
+                        "last_email_id": email_ids[-1].decode(),
+                        "last_sync_at": datetime.utcnow()
+                    }
+                },
+                upsert=True
+            )
+        
+        return {
+            "success": True,
+            "message": f"Full sync completed: {total_processed} new emails processed (total found: {len(email_ids)})"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Today sync error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Today sync failed: {str(e)}")
+
+
 @api_router.get("/alerts/list")
 async def list_alerts(
     category: Optional[str] = Query(None),
