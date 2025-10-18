@@ -258,6 +258,8 @@ function Dashboard({ user, onLogout }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("priority");
   const [filterDate, setFilterDate] = useState("");
+  const [bikesDisplayLimit, setBikesDisplayLimit] = useState(6);
+  const [showAllBikes, setShowAllBikes] = useState(false);
   
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20); // Reduced for lazy loading
