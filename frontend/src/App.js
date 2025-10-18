@@ -784,6 +784,15 @@ function Dashboard({ user, onLogout }) {
       document.documentElement.classList.remove("dark");
     }
   };
+  
+  // Apply dark mode on mount
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [darkMode]);
 
   const Header = () => {
     const isAdmin = user && user.username === 'admin';
