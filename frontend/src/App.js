@@ -744,7 +744,16 @@ function Dashboard({ user, onLogout }) {
         </nav>
       </div>
 
-      <div className="p-6 border-t border-gray-200">
+      <div className="p-6 border-t border-gray-200 space-y-3">
+        <button
+          onClick={toggleDarkMode}
+          className="w-full flex items-center space-x-3 px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-gray-100 transition"
+          title={darkMode ? "Light mode" : "Dark mode"}
+        >
+          {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          <span className="font-medium">{darkMode ? "Light Mode" : "Dark Mode"}</span>
+        </button>
+        
         <button
           onClick={onLogout}
           className="w-full flex items-center space-x-3 px-3 py-2 rounded-md text-sm text-red-600 hover:bg-red-50 transition"
