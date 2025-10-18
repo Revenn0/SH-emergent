@@ -276,7 +276,6 @@ function Dashboard({ user, onLogout }) {
   const [loadingBikes, setLoadingBikes] = useState(false);
   const [bikeSearchQuery, setBikeSearchQuery] = useState("");
   const [selectedBikeId, setSelectedBikeId] = useState(null);
-  const [showBikeHistory, setShowBikeHistory] = useState(false);
 
   useEffect(() => {
     loadAlerts();
