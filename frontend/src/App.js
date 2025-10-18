@@ -706,8 +706,8 @@ function Dashboard({ user, onLogout }) {
             onClick={() => setCurrentPage("dashboard")}
             className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-sm transition ${
               currentPage === "dashboard"
-                ? "bg-gray-900 text-white"
-                : "text-gray-700 hover:bg-gray-100"
+                ? "bg-gray-900 text-white dark:bg-gray-700"
+                : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
             }`}
           >
             <LayoutDashboard className="w-4 h-4" />
@@ -718,44 +718,48 @@ function Dashboard({ user, onLogout }) {
             onClick={() => setCurrentPage("bikes")}
             className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-sm transition ${
               currentPage === "bikes"
-                ? "bg-gray-900 text-white"
-                : "text-gray-700 hover:bg-gray-100"
+                ? "bg-gray-900 text-white dark:bg-gray-700"
+                : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
             }`}
           >
             <Bike className="w-4 h-4" />
             <span className="font-medium">Bikes</span>
           </button>
 
-          <button
-            onClick={() => setCurrentPage("admin")}
-            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-sm transition ${
-              currentPage === "admin"
-                ? "bg-gray-900 text-white"
-                : "text-gray-700 hover:bg-gray-100"
-            }`}
-          >
-            <Activity className="w-4 h-4" />
-            <span className="font-medium">Admin Dashboard</span>
-          </button>
+          {user && user.role === 'admin' && (
+            <>
+              <button
+                onClick={() => setCurrentPage("admin")}
+                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-sm transition ${
+                  currentPage === "admin"
+                    ? "bg-gray-900 text-white dark:bg-gray-700"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                }`}
+              >
+                <Activity className="w-4 h-4" />
+                <span className="font-medium">Admin Dashboard</span>
+              </button>
 
-          <button
-            onClick={() => setCurrentPage("settings")}
-            className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-sm transition ${
-              currentPage === "settings"
-                ? "bg-gray-900 text-white"
-                : "text-gray-700 hover:bg-gray-100"
-            }`}
-          >
-            <Settings className="w-4 h-4" />
-            <span className="font-medium">Service Tracker</span>
-          </button>
+              <button
+                onClick={() => setCurrentPage("settings")}
+                className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-sm transition ${
+                  currentPage === "settings"
+                    ? "bg-gray-900 text-white dark:bg-gray-700"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                }`}
+              >
+                <Settings className="w-4 h-4" />
+                <span className="font-medium">Service Tracker</span>
+              </button>
+            </>
+          )}
         </nav>
       </div>
 
-      <div className="p-6 border-t border-gray-200 space-y-3">
+      <div className="p-6 border-t border-gray-200 dark:border-gray-700 space-y-3">
         <button
           onClick={toggleDarkMode}
-          className="w-full flex items-center space-x-3 px-3 py-2 rounded-md text-sm text-gray-700 hover:bg-gray-100 transition"
+          className="w-full flex items-center space-x-3 px-3 py-2 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
           title={darkMode ? "Light mode" : "Dark mode"}
         >
           {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
