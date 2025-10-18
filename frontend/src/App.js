@@ -1332,7 +1332,7 @@ function Dashboard({ user, onLogout }) {
                   ) : (
                     groupedAlerts.filter(group => 
                       !searchQuery || group.device.toLowerCase().includes(searchQuery.toLowerCase())
-                    ).map((group, idx) => (
+                    ).slice(0, showAllBikes ? undefined : bikesDisplayLimit).map((group, idx) => (
                       <tr 
                         key={idx} 
                         className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900 cursor-pointer transition"
