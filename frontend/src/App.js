@@ -887,11 +887,6 @@ function Dashboard({ user, onLogout }) {
 
   const BikesPage = () => {
 
-    const openBikeHistory = (bikeId) => {
-      setSelectedBikeId(bikeId);
-      setShowBikeHistory(true);
-    };
-
     if (loadingBikes) {
       return (
         <div className="flex items-center justify-center h-full">
