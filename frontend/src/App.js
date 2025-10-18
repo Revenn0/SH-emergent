@@ -1974,11 +1974,11 @@ function Dashboard({ user, onLogout }) {
   }
 
   return (
-    <div className="h-screen bg-gray-50 flex overflow-hidden">
+    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex overflow-hidden">
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
           {currentPage === "dashboard" && <DashboardPage />}
           {currentPage === "bikes" && <BikesPage />}
           {currentPage === "admin" && <AdminPage />}
