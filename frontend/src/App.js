@@ -691,13 +691,13 @@ function Dashboard({ user, onLogout }) {
   };
 
   const Sidebar = () => (
-    <div className={`${sidebarOpen ? 'w-64' : 'w-0'} bg-white border-r border-gray-200 transition-all duration-300 overflow-hidden flex flex-col h-screen`}>
+    <div className={`${sidebarOpen ? 'w-64' : 'w-0'} bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 overflow-hidden flex flex-col h-screen`}>
       <div className="p-6 flex-1">
         <div className="flex items-center space-x-3 mb-8">
-          <Bike className="w-6 h-6 text-gray-900" />
+          <Bike className="w-6 h-6 text-gray-900 dark:text-white" />
           <div>
-            <span className="text-sm font-semibold text-gray-900">Tracker System</span>
-            <p className="text-xs text-gray-500">Dashboard</p>
+            <span className="text-sm font-semibold text-gray-900 dark:text-white">Tracker System</span>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Dashboard</p>
           </div>
         </div>
 
