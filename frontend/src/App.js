@@ -234,6 +234,12 @@ function Dashboard({ user, onLogout }) {
   const [syncProgress, setSyncProgress] = useState({ total: 0, processed: 0, remaining: 0 });
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  
+  // New: Bike history modal states
+  const [selectedBike, setSelectedBike] = useState(null);
+  const [showBikeHistoryModal, setShowBikeHistoryModal] = useState(false);
+  const [bikeHistory, setBikeHistory] = useState({ alerts: [], notes: [] });
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   const [gmailEmail, setGmailEmail] = useState("");
   const [gmailPassword, setGmailPassword] = useState("");
@@ -245,7 +251,10 @@ function Dashboard({ user, onLogout }) {
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [autoRefresh, setAutoRefresh] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    // Initialize dark mode from localStorage
+    return localStorage.getItem('darkMode') === 'true';
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("priority");
   const [filterDate, setFilterDate] = useState("");
