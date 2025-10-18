@@ -793,6 +793,26 @@ function Dashboard({ user, onLogout }) {
       document.documentElement.classList.remove("dark");
     }
   }, [darkMode]);
+  
+  // Function to open bike history modal
+  const openBikeHistory = async (bikeId, trackerName) => {
+    setSelectedBike({ id: bikeId, tracker_name: trackerName });
+    setShowBikeHistoryModal(true);
+    setLoadingHistory(true);
+    
+    try {
+      const response = await api.get(`/bikes/${bikeId}/history`);
+      setBikeHistory({
+        alerts: response.data.alerts || [],
+        notes: response.data.notes || []
+      });
+    } catch (error) {
+      console.error("Failed to load bike history:", error);
+      setBikeHistory({ alerts: [], notes: [] });
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   const Header = () => {
     const isAdmin = user && user.username === 'admin';
