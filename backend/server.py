@@ -1750,6 +1750,94 @@ async def list_bikes(current_user: dict = Depends(get_current_user)):
         return {"bikes": result}
 
 
+@api_router.get("/bikes/paginated")
+async def get_bikes_paginated(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    sort_by: str = Query("newest"),
+    category: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get paginated bikes with alert counts"""
+    async with db_pool.acquire() as conn:
+        # Build WHERE clause
+        where_conditions = ["user_id = $1"]
+        params = [current_user['id']]
+        param_count = 2
+        
+        if category and category != "All":
+            where_conditions.append(f"alert_type = ${param_count}")
+            params.append(category)
+            param_count += 1
+        
+        if search:
+            where_conditions.append(f"(tracker_name ILIKE ${param_count} OR device_serial ILIKE ${param_count})")
+            params.append(f"%{search}%")
+            param_count += 1
+        
+        where_clause = " AND ".join(where_conditions)
+        
+        # Get total count of bikes
+        total_query = f"""
+            SELECT COUNT(DISTINCT tracker_name)
+            FROM tracker_alerts
+            WHERE {where_clause}
+        """
+        total_bikes = await conn.fetchval(total_query, *params)
+        
+        # Get bikes with sorting
+        sort_clause = {
+            "newest": "MAX(created_at) DESC",
+            "oldest": "MAX(created_at) ASC",
+            "alerts": "COUNT(*) DESC",
+            "device": "tracker_name ASC"
+        }.get(sort_by, "MAX(created_at) DESC")
+        
+        offset = (page - 1) * limit
+        
+        bikes_query = f"""
+            SELECT 
+                tracker_name,
+                MAX(device_serial) as device_serial,
+                COUNT(*) as alert_count,
+                MAX(created_at) as latest_alert_at,
+                STRING_AGG(DISTINCT alert_type, ', ') as alert_types
+            FROM tracker_alerts
+            WHERE {where_clause}
+            GROUP BY tracker_name
+            ORDER BY {sort_clause}
+            LIMIT ${param_count} OFFSET ${param_count + 1}
+        """
+        
+        params.extend([limit, offset])
+        bikes = await conn.fetch(bikes_query, *params)
+        
+        bikes_list = []
+        for bike in bikes:
+            bikes_list.append({
+                "tracker_name": bike['tracker_name'],
+                "device_serial": bike['device_serial'],
+                "alert_count": bike['alert_count'],
+                "latest_alert_at": bike['latest_alert_at'].isoformat() if bike['latest_alert_at'] else None,
+                "alert_types": bike['alert_types']
+            })
+        
+        total_pages = (total_bikes + limit - 1) // limit if total_bikes > 0 else 1
+        
+        return {
+            "bikes": bikes_list,
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total": total_bikes,
+                "total_pages": total_pages,
+                "has_next": page < total_pages,
+                "has_prev": page > 1
+            }
+        }
+
+
 @api_router.get("/bikes/{bike_id}/history")
 async def get_bike_history(bike_id: int, current_user: dict = Depends(get_current_user)):
     """Get bike details with alerts and notes history"""
