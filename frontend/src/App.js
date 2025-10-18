@@ -1382,6 +1382,22 @@ function Dashboard({ user, onLogout }) {
               </table>
             </div>
             
+            {/* Show More/Less bikes button */}
+            {groupedAlerts.filter(group => 
+              !searchQuery || group.device.toLowerCase().includes(searchQuery.toLowerCase())
+            ).length > bikesDisplayLimit && (
+              <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-center">
+                <button
+                  onClick={() => setShowAllBikes(!showAllBikes)}
+                  className="px-6 py-2.5 rounded-md text-sm font-medium transition bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  {showAllBikes ? 'Show Less' : `Show More (${groupedAlerts.filter(group => 
+                    !searchQuery || group.device.toLowerCase().includes(searchQuery.toLowerCase())
+                  ).length - bikesDisplayLimit} more bikes)`}
+                </button>
+              </div>
+            )}
+            
             {/* Lazy loading: Load More button */}
             {hasMore && (
               <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col items-center gap-3">
