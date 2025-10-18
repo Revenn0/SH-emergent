@@ -1770,7 +1770,6 @@ function Dashboard({ user, onLogout }) {
     if (!showModal || !selectedAlert) return null;
 
     const openBikeHistoryFromAlert = async () => {
-    const openBikeHistoryFromAlert = async () => {
       try {
         const response = await api.get(`/bikes/by-tracker/${encodeURIComponent(selectedAlert.device)}`);
         await openBikeHistory(response.data.bike_id, selectedAlert.device);
