@@ -1423,83 +1423,92 @@ function Dashboard({ user, onLogout }) {
   };
 
   const AdminPage = () => {
-    const [systemStatus, setSystemStatus] = useState(null);
-    const [loadingStatus, setLoadingStatus] = useState(true);
-    const [syncConfig, setSyncConfig] = useState({ sync_interval_minutes: 10, email_limit_per_sync: 100 });
-    const [showSaveSuccess, setShowSaveSuccess] = useState(false);
-    const [savingConfig, setSavingConfig] = useState(false);
+    const [users, setUsers] = useState([]);
+    const [loadingUsers, setLoadingUsers] = useState(true);
+    const [showUserModal, setShowUserModal] = useState(false);
+    const [modalMode, setModalMode] = useState('create'); // 'create' or 'edit'
+    const [selectedUser, setSelectedUser] = useState(null);
+    const [formData, setFormData] = useState({ username: '', email: '', password: '', role: 'viewer' });
+    const [savingUser, setSavingUser] = useState(false);
 
     useEffect(() => {
-      loadSystemStatus();
-      loadSyncConfig();
-      const interval = setInterval(loadSystemStatusQuiet, 60000); // Silent refresh every 60s
-      return () => clearInterval(interval);
+      loadUsers();
     }, []);
 
-    const loadSystemStatus = async () => {
+    const loadUsers = async () => {
       try {
-        const response = await api.get("/system/status");
-        setSystemStatus(response.data);
+        setLoadingUsers(true);
+        const response = await api.get("/users/list");
+        setUsers(response.data.users || []);
       } catch (error) {
-        console.error("Failed to load system status:", error);
+        console.error("Failed to load users:", error);
       } finally {
-        setLoadingStatus(false);
+        setLoadingUsers(false);
       }
     };
 
-    const loadSystemStatusQuiet = async () => {
-      try {
-        // Silent refresh: updates data without loading spinner
-        const response = await api.get("/system/status");
-        setSystemStatus(response.data);
-      } catch (error) {
-        console.error("Failed to quiet refresh system status:", error);
-      }
+    const openCreateModal = () => {
+      setModalMode('create');
+      setFormData({ username: '', email: '', password: '', role: 'viewer' });
+      setSelectedUser(null);
+      setShowUserModal(true);
     };
 
-    const loadSyncConfig = async () => {
-      try {
-        const response = await api.get("/sync/config");
-        setSyncConfig(response.data);
-        setSyncInterval(response.data.sync_interval_minutes);
-        setEmailLimit(response.data.email_limit_per_sync);
-      } catch (error) {
-        console.error("Failed to load sync config:", error);
-      }
+    const openEditModal = (user) => {
+      setModalMode('edit');
+      setFormData({ 
+        username: user.username, 
+        email: user.email, 
+        password: '', 
+        role: user.role 
+      });
+      setSelectedUser(user);
+      setShowUserModal(true);
     };
 
-    const handleSaveSyncConfig = async () => {
-      const intervalValue = parseInt(syncInterval);
-      const limitValue = parseInt(emailLimit);
-
-      if (!intervalValue || intervalValue < 1 || intervalValue > 1440) {
-        alert("Sync interval must be between 1 and 1440 minutes");
+    const handleSaveUser = async () => {
+      if (!formData.username || !formData.email) {
+        alert("Username and email are required");
         return;
       }
 
-      if (!limitValue || limitValue < 1 || limitValue > 200) {
-        alert("Email limit must be between 1 and 200");
+      if (modalMode === 'create' && !formData.password) {
+        alert("Password is required for new users");
         return;
       }
 
-      setSavingConfig(true);
+      setSavingUser(true);
       try {
-        await api.post("/sync/config", {
-          sync_interval_minutes: intervalValue,
-          email_limit_per_sync: limitValue
-        });
-        setShowSaveSuccess(true);
-        setTimeout(() => setShowSaveSuccess(false), 3000);
+        if (modalMode === 'create') {
+          await api.post("/users/create", formData);
+        } else {
+          await api.put(`/users/${selectedUser.id}`, formData);
+        }
+        setShowUserModal(false);
+        await loadUsers();
       } catch (error) {
-        console.error("Failed to save sync config:", error);
-        const errorMsg = error.response?.data?.detail || "Failed to save configuration. Please try again.";
-        alert(errorMsg);
+        console.error("Failed to save user:", error);
+        alert(error.response?.data?.detail || "Failed to save user");
       } finally {
-        setSavingConfig(false);
+        setSavingUser(false);
       }
     };
 
-    if (loadingStatus) {
+    const handleDeleteUser = async (userId, username) => {
+      if (!window.confirm(`Are you sure you want to delete user "${username}"?`)) {
+        return;
+      }
+
+      try {
+        await api.delete(`/users/${userId}`);
+        await loadUsers();
+      } catch (error) {
+        console.error("Failed to delete user:", error);
+        alert(error.response?.data?.detail || "Failed to delete user");
+      }
+    };
+
+    if (loadingUsers) {
       return (
         <div className="p-6 flex items-center justify-center">
           <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
@@ -1509,175 +1518,181 @@ function Dashboard({ user, onLogout }) {
 
     return (
       <div className="p-6 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs text-gray-600">System Status</p>
-              <Activity className="w-4 h-4 text-gray-400" />
-            </div>
-            <div className="flex items-center space-x-2">
-              {systemStatus?.system_healthy ? (
-                <>
-                  <CheckCircle className="w-5 h-5 text-green-500" />
-                  <span className="text-lg font-semibold text-green-600">Online</span>
-                </>
-              ) : (
-                <>
-                  <XCircle className="w-5 h-5 text-red-500" />
-                  <span className="text-lg font-semibold text-red-600">Error</span>
-                </>
-              )}
-            </div>
-            {systemStatus?.last_sync_at && (
-              <p className="text-xs text-gray-500 mt-2">
-                Last sync: {formatUKTimestamp(systemStatus.last_sync_at)}
-              </p>
-            )}
-          </div>
-
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs text-gray-600">Database</p>
-              <Database className="w-4 h-4 text-gray-400" />
-            </div>
-            <div className="flex items-center space-x-2">
-              {systemStatus?.database_connected ? (
-                <>
-                  <CheckCircle className="w-5 h-5 text-green-500" />
-                  <span className="text-lg font-semibold text-green-600">Connected</span>
-                </>
-              ) : (
-                <>
-                  <XCircle className="w-5 h-5 text-red-500" />
-                  <span className="text-lg font-semibold text-red-600">Disconnected</span>
-                </>
-              )}
-            </div>
-            <p className="text-xs text-gray-500 mt-1">Neon PostgreSQL</p>
-          </div>
-
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs text-gray-600">Gmail Integration</p>
-              <Mail className="w-4 h-4 text-gray-400" />
-            </div>
-            <div className="flex items-center space-x-2">
-              {systemStatus?.gmail_connected ? (
-                <>
-                  <CheckCircle className="w-5 h-5 text-green-500" />
-                  <span className="text-lg font-semibold text-green-600">Active</span>
-                </>
-              ) : (
-                <>
-                  <Clock className="w-5 h-5 text-yellow-500" />
-                  <span className="text-lg font-semibold text-yellow-600">Inactive</span>
-                </>
-              )}
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              {systemStatus?.gmail_email || "Not configured"}
-            </p>
-          </div>
-
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs text-gray-600">Total Alerts</p>
-              <Activity className="w-4 h-4 text-gray-400" />
-            </div>
-            <p className="text-2xl font-semibold text-gray-900">{systemStatus?.total_alerts || 0}</p>
-            <p className="text-xs text-gray-500 mt-1">In database</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h3 className="text-sm font-semibold text-gray-900 mb-1">Last Sync Status</h3>
-            <p className="text-xs text-gray-500 mb-4">Most recent email synchronization</p>
-            {systemStatus?.last_sync_at ? (
-              <div>
-                <p className="text-sm font-medium text-gray-900">{formatUKTimestamp(systemStatus.last_sync_at)}</p>
-                <p className="text-xs text-gray-500 mt-1">Last Email ID: {systemStatus.last_email_id || 'N/A'}</p>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-600">No sync history available</p>
-            )}
-          </div>
-
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-1">Activity Summary</h3>
-          <p className="text-xs text-gray-500 mb-4">Recent system activity</p>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Alerts (24h):</span>
-              <span className="font-medium text-gray-900">{stats.total}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Total Devices:</span>
-              <span className="font-medium text-gray-900">{groupedAlerts.length}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Unique Devices:</span>
-              <span className="font-medium text-gray-900">{groupedAlerts.length}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Errors (1h):</span>
-              <span className="font-medium text-red-600">0</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4">Sync Configuration</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex items-center justify-between">
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1.5">
-              Sync Interval (minutes)
-            </label>
-            <input
-              type="number"
-              value={syncInterval}
-              disabled
-              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600 cursor-not-allowed text-sm"
-              min="1"
-            />
-            <p className="text-xs text-gray-500 mt-1">Fixed at 5 minutes for optimal performance</p>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1.5">
-              Email Limit per Sync
-            </label>
-            <input
-              type="number"
-              value={emailLimit}
-              disabled
-              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600 cursor-not-allowed text-sm"
-              min="1"
-              max="200"
-            />
-            <p className="text-xs text-gray-500 mt-1">Fixed at 30 emails per sync</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-lg border border-red-200 p-6">
-        <h3 className="text-sm font-semibold text-gray-900 mb-2">Danger Zone</h3>
-        <p className="text-xs text-gray-500 mb-4">Irreversible actions - use with caution</p>
-        <div className="flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-md">
-          <div>
-            <p className="text-sm font-medium text-red-900">Clear All History</p>
-            <p className="text-xs text-red-700 mt-0.5">Deletes all alerts and resets sync checkpoint</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">User Management</h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Manage system users and permissions</p>
           </div>
           <button
-            onClick={handleClearHistory}
-            className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 transition"
+            onClick={openCreateModal}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition flex items-center space-x-2"
           >
-            <Trash2 className="inline w-4 h-4 mr-1" />
-            Clear All
+            <Bell className="w-4 h-4" />
+            <span>Create User</span>
           </button>
         </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-gray-50 dark:bg-gray-900">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Username
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Email
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Role
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Created At
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              {users.map((user) => (
+                <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                    {user.username}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
+                    {user.email}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      user.role === 'admin' 
+                        ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' 
+                        : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                    }`}>
+                      {user.role}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
+                    {formatUKTimestamp(user.created_at)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                    <button
+                      onClick={() => openEditModal(user)}
+                      className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDeleteUser(user.id, user.username)}
+                      className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {users.length === 0 && (
+            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+              No users found
+            </div>
+          )}
+        </div>
+
+        {/* User Modal */}
+        {showUserModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg max-w-md w-full p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  {modalMode === 'create' ? 'Create User' : 'Edit User'}
+                </h2>
+                <button
+                  onClick={() => setShowUserModal(false)}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                >
+                  <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.username}
+                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                    placeholder="Enter username"
+                    disabled={modalMode === 'edit'}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                    placeholder="Enter email"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Password {modalMode === 'edit' && '(leave blank to keep current)'}
+                  </label>
+                  <input
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                    placeholder="Enter password"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Role
+                  </label>
+                  <select
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="viewer">Viewer</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 mt-6">
+                <button
+                  onClick={() => setShowUserModal(false)}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                  disabled={savingUser}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveUser}
+                  disabled={savingUser}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition disabled:opacity-50 flex items-center space-x-2"
+                >
+                  {savingUser && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>{modalMode === 'create' ? 'Create' : 'Save'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </div>
     );
   };
 
