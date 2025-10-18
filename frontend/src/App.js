@@ -1770,10 +1770,10 @@ function Dashboard({ user, onLogout }) {
     if (!showModal || !selectedAlert) return null;
 
     const openBikeHistoryFromAlert = async () => {
+    const openBikeHistoryFromAlert = async () => {
       try {
         const response = await api.get(`/bikes/by-tracker/${encodeURIComponent(selectedAlert.device)}`);
-        setSelectedBikeId(response.data.bike_id);
-        setShowBikeHistory(true);
+        await openBikeHistory(response.data.bike_id, selectedAlert.device);
         setShowModal(false);
       } catch (error) {
         console.error("Failed to open bike history:", error);
