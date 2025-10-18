@@ -821,22 +821,22 @@ function Dashboard({ user, onLogout }) {
     const isAdmin = user && user.username === 'admin';
     
     return (
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
+      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-1 hover:bg-gray-100 rounded transition"
+              className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition"
             >
-              {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {sidebarOpen ? <X className="w-5 h-5 text-gray-900 dark:text-white" /> : <Menu className="w-5 h-5 text-gray-900 dark:text-white" />}
             </button>
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">
+              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
                 {currentPage === "dashboard" && "Bike Tracker Dashboard"}
                 {currentPage === "admin" && "System Dashboard"}
                 {currentPage === "settings" && "Settings"}
               </h1>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 {currentPage === "dashboard" && "Monitor your bike trackers and alerts by category"}
                 {currentPage === "admin" && "Monitor system health and logs"}
                 {currentPage === "settings" && "Configure Gmail integration"}
@@ -847,7 +847,7 @@ function Dashboard({ user, onLogout }) {
             <button
               onClick={handleRefreshAlerts}
               disabled={syncing}
-              className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              className="flex items-center space-x-2 px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
               <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
               <span>Refresh Alerts</span>
@@ -855,7 +855,7 @@ function Dashboard({ user, onLogout }) {
             <button
               onClick={handleSyncTodayEmails}
               disabled={syncing}
-              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
               <Download className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
               <span>
