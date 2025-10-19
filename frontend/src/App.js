@@ -6,8 +6,11 @@ import {
   Bell, Settings, LayoutDashboard, LogOut, Menu, X, Trash2, 
   AlertTriangle, Database, Mail, Activity, Bike, CheckCircle, 
   XCircle, Clock, MapPin, Info, Moon, Sun, Search, Star, 
-  MessageSquare, CheckCircle2, RefreshCw, Loader2, Download
+  MessageSquare, CheckCircle2, RefreshCw, Loader2, Download, Calendar as CalendarIcon
 } from "lucide-react";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Calendar } from "@/components/ui/calendar";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
