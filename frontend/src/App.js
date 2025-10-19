@@ -1466,53 +1466,36 @@ function Dashboard({ user, onLogout }) {
                 </div>
                 <div className="flex items-center space-x-3">
                   <label className="text-xs font-medium text-gray-600 dark:text-gray-300">Date Range:</label>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-md text-sm bg-white dark:bg-gray-800">
-                            <CalendarIcon className="w-4 h-4 text-gray-500" />
-                            {startDateInput ? startDateInput : 'Start date'}
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent>
-                          <Calendar
-                            mode="single"
-                            selected={startDateInput ? new Date(startDateInput) : undefined}
-                            onSelect={(d) => setStartDateInput(d ? d.toISOString().slice(0,10) : "")}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                    <span className="text-gray-500 dark:text-gray-400">to</span>
-                    <div className="flex items-center gap-2">
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-md text-sm bg-white dark:bg-gray-800">
-                            <CalendarIcon className="w-4 h-4 text-gray-500" />
-                            {endDateInput ? endDateInput : 'End date'}
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent>
-                          <Calendar
-                            mode="single"
-                            selected={endDateInput ? new Date(endDateInput) : undefined}
-                            onSelect={(d) => setEndDateInput(d ? d.toISOString().slice(0,10) : "")}
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-md text-sm bg-white dark:bg-gray-800">
+                        <CalendarIcon className="w-4 h-4 text-gray-500" />
+                        {dateRange.from || dateRange.to
+                          ? `${dateRange.from ? dateRange.from.toISOString().slice(0,10) : ''} – ${dateRange.to ? dateRange.to.toISOString().slice(0,10) : ''}`
+                          : 'Select range'}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent>
+                      <DateRangePicker value={dateRange} onChange={(range) => setDateRange(range || { from: undefined, to: undefined })} />
+                    </PopoverContent>
+                  </Popover>
                   <button
-                    onClick={handleApplyDateFilter}
-                    disabled={!startDateInput && !endDateInput}
+                    onClick={() => {
+                      setAppliedStartDate(dateRange.from ? dateRange.from.toISOString().slice(0,10) : "");
+                      setAppliedEndDate(dateRange.to ? dateRange.to.toISOString().slice(0,10) : "");
+                      setPage(1);
+                    }}
+                    disabled={!dateRange.from && !dateRange.to}
                     className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Apply
                   </button>
                   {(appliedStartDate || appliedEndDate) && (
                     <button
-                      onClick={handleClearDateFilter}
+                      onClick={() => {
+                        setDateRange({ from: undefined, to: undefined });
+                        handleClearDateFilter();
+                      }}
                       className="px-3 py-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 underline"
                     >
                       Clear
