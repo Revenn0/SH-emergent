@@ -1424,17 +1424,33 @@ function Dashboard({ user, onLogout }) {
                   )}
                 </div>
                 <div className="flex items-center space-x-2">
-                  <label className="text-xs font-medium text-gray-600 dark:text-gray-300">Filter by Date:</label>
+                  <label className="text-xs font-medium text-gray-600 dark:text-gray-300">Date Range:</label>
                   <input
                     type="date"
-                    value={filterDate}
-                    onChange={(e) => { setFilterDate(e.target.value); setPage(1); }}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-gray-900 focus:border-gray-900 outline-none"
+                    value={startDateInput}
+                    onChange={(e) => setStartDateInput(e.target.value)}
+                    placeholder="Start date"
+                    className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   />
-                  {filterDate && (
+                  <span className="text-gray-500 dark:text-gray-400">to</span>
+                  <input
+                    type="date"
+                    value={endDateInput}
+                    onChange={(e) => setEndDateInput(e.target.value)}
+                    placeholder="End date"
+                    className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <button
+                    onClick={handleApplyDateFilter}
+                    disabled={!startDateInput && !endDateInput}
+                    className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Apply
+                  </button>
+                  {(appliedStartDate || appliedEndDate) && (
                     <button
-                      onClick={() => { setFilterDate(""); setPage(1); }}
-                      className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:text-gray-300 underline"
+                      onClick={handleClearDateFilter}
+                      className="px-3 py-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 underline"
                     >
                       Clear
                     </button>
