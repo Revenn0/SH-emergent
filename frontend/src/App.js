@@ -593,6 +593,25 @@ function Dashboard({ user, onLogout }) {
       }
     });
 
+    // Calculate stats based on filtered alerts
+    const totalAlerts = filteredAlerts.length;
+    const overTurnCount = filteredAlerts.filter(a => a.alert_type === "Over-turn").length;
+    const heavyImpactCount = filteredAlerts.filter(a => a.alert_type === "Heavy Impact").length;
+    const noCommunicationCount = filteredAlerts.filter(a => a.alert_type === "No Communication").length;
+    const crashDetectedCount = groupedArray.filter(g => g.severity === "crash-detected").length;
+    const highPriorityCount = overTurnCount + heavyImpactCount;
+    
+    // Update stats with filtered data
+    setStats(prevStats => ({
+      ...prevStats,
+      total: totalAlerts,
+      highPriority: highPriorityCount,
+      overTurn: overTurnCount,
+      heavyImpact: heavyImpactCount,
+      noCommunication: noCommunicationCount,
+      crashDetected: crashDetectedCount
+    }));
+
     setGroupedAlerts(sorted);
   };
 
