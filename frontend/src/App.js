@@ -397,7 +397,7 @@ function Dashboard({ user, onLogout }) {
       const response = await api.get(url);
       
       setAlerts(response.data.alerts);
-      setStats(response.data.stats);
+      // Stats will be calculated in groupAlertsByDevice based on filtered data
       setGmailConnected(response.data.connected);
       setGmailEmail(response.data.email || "");
       setHasMore(response.data.pagination?.has_next || false);
