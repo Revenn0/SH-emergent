@@ -1646,40 +1646,16 @@ function Dashboard({ user, onLogout }) {
               </div>
             )}
             
-            {/* Lazy loading: Load More button */}
-            {hasMore && (
-              <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col items-center gap-3">
-                <div className="text-sm text-gray-600 dark:text-gray-300">
-                  <span>
-                    Showing <span className="font-medium">{alerts.length}</span> of{' '}
-                    <span className="font-medium">{pagination.total}</span> alerts
-                  </span>
-                </div>
-                
-                <button
-                  onClick={loadMoreAlerts}
-                  disabled={loadingMore}
-                  className={`px-6 py-2.5 rounded-md text-sm font-medium transition ${
-                    loadingMore
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-gray-900 text-white hover:bg-gray-800'
-                  }`}
-                >
-                  {loadingMore ? 'Loading...' : 'Load More Alerts'}
-                </button>
-              </div>
-            )}
-            
-            {/* Show total when no more to load */}
-            {!hasMore && alerts.length > 0 && (
-              <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-center">
+            {/* Lazy loading removed: always show all alerts */}
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-center">
+              {alerts.length > 0 && (
                 <div className="text-sm text-gray-600 dark:text-gray-300">
                   <span>
                     Showing all <span className="font-medium">{alerts.length}</span> alerts
                   </span>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
