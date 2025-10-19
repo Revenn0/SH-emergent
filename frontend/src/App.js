@@ -61,30 +61,33 @@ const formatUKTimestamp = (dateString) => {
   }
 };
 
+// Helper function to check if alert is within date range
 const isAlertInDateRange = (alert, startDate, endDate) => {
   if (!startDate && !endDate) return true;
   
   try {
-    // Parse the alert timestamp (assuming it's in ISO format from backend)
-    const alertDate = new Date(alert.created_at || alert.alert_time);
-    if (isNaN(alertDate.getTime())) return true; // Include if can't parse
+    // Get the alert date from created_at (ISO format from backend)
+    const alertDate = new Date(alert.created_at);
+    if (isNaN(alertDate.getTime())) return true;
     
-    // Convert to date only (ignore time for comparison)
+    // Convert to date only for comparison
     const alertDateOnly = new Date(alertDate.getFullYear(), alertDate.getMonth(), alertDate.getDate());
     
     if (startDate) {
       const start = new Date(startDate);
-      if (alertDateOnly < start) return false;
+      const startDateOnly = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      if (alertDateOnly < startDateOnly) return false;
     }
     
     if (endDate) {
       const end = new Date(endDate);
-      if (alertDateOnly > end) return false;
+      const endDateOnly = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+      if (alertDateOnly > endDateOnly) return false;
     }
     
     return true;
   } catch {
-    return true; // Include if error parsing
+    return true;
   }
 };
 
