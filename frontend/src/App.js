@@ -982,7 +982,7 @@ function Dashboard({ user, onLogout }) {
         </div>
 
         {bikes.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+          <Card><CardContent className="p-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
@@ -1350,7 +1350,7 @@ function Dashboard({ user, onLogout }) {
     return (
       <div className="p-6 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+          <Card><CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs text-gray-600 dark:text-gray-300">Total Alerts</p>
               <AlertTriangle className="w-4 h-4 text-gray-400" />
@@ -1379,7 +1379,7 @@ function Dashboard({ user, onLogout }) {
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Over-turn + Heavy impact</p>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+          <Card><CardContent className="p-4">
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs text-gray-600 dark:text-gray-300">Acknowledged</p>
               <CheckCircle className="w-4 h-4 text-green-500" />
