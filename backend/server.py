@@ -1359,28 +1359,28 @@ async def list_alerts(
             elif has_over_turn or has_heavy_impact or has_no_comm:
                 high_priority_count += 1
         
-        alert_list = [
-            {
-                "id": a["id"],
-                "alert_type": a["alert_type"],
-                "alert_time": a["alert_time"],
-                "location": a["location"],
-                "latitude": a["latitude"],
-                "longitude": a["longitude"],
-                "device_serial": a["device_serial"],
-                "tracker_name": a["tracker_name"],
-                "account_name": a["account_name"],
-                "status": a.get("status", "New"),
-                "acknowledged": a.get("acknowledged", False),
-                "acknowledged_at": str(a["acknowledged_at"]) if a.get("acknowledged_at") else None,
-                "acknowledged_by": a.get("acknowledged_by"),
-                "notes": a.get("notes"),
-                "assigned_to": a.get("assigned_to"),
-                "favorite": a.get("favorite", False),
-                "created_at": a["created_at"].isoformat() if a.get("created_at") else None
-            }
-            for a in alerts
-        ]
+        alert_list = []
+        for a in alerts:
+            ad = dict(a)
+            alert_list.append({
+                "id": ad.get("id"),
+                "alert_type": ad.get("alert_type"),
+                "alert_time": ad.get("alert_time"),
+                "location": ad.get("location"),
+                "latitude": ad.get("latitude"),
+                "longitude": ad.get("longitude"),
+                "device_serial": ad.get("device_serial"),
+                "tracker_name": ad.get("tracker_name"),
+                "account_name": ad.get("account_name"),
+                "status": ad.get("status", "New"),
+                "acknowledged": ad.get("acknowledged", False),
+                "acknowledged_at": str(ad.get("acknowledged_at")) if ad.get("acknowledged_at") else None,
+                "acknowledged_by": ad.get("acknowledged_by"),
+                "notes": ad.get("notes"),
+                "assigned_to": ad.get("assigned_to"),
+                "favorite": ad.get("favorite", False),
+                "created_at": ad.get("created_at").isoformat() if ad.get("created_at") else None
+            })
         
         total_pages = (total_count + limit - 1) // limit
         
