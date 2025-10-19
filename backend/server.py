@@ -1937,7 +1937,7 @@ async def update_bike_note(note_id: int, request: AddBikeNoteRequest, current_us
         await conn.execute(
             """
             UPDATE bike_notes
-            SET note = $1, updated_at = CURRENT_TIMESTAMP
+            SET note = $1
             WHERE id = $2 AND user_id = $3
             """,
             request.note, note_id, current_user['id']
