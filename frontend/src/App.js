@@ -67,6 +67,10 @@ const formatUKTimestamp = (dateString) => {
 
 // Helper function to check if alert is within date range
 const isAlertInDateRange = (alert, startDate, endDate) => {
+  // Prefer backend-created timestamp if available
+  const createdAt = alert.created_at || alert.createdAt || alert.createdAtISO;
+  const source = createdAt || alert.alert_time;
+  if (!source && !startDate && !endDate) return true;
   if (!startDate && !endDate) return true;
   
   try {
