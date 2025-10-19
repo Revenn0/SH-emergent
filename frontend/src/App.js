@@ -1357,7 +1357,7 @@ function Dashboard({ user, onLogout }) {
             </div>
             <p className="text-2xl font-semibold text-gray-900 dark:text-white">{stats.total}</p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Filtered alerts</p>
-          </div>
+          </CardContent></Card>
 
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 cursor-pointer hover:border-orange-400 transition" onClick={() => setSelectedCategory("Over-turn")}>
             <div className="flex items-center justify-between mb-2">
