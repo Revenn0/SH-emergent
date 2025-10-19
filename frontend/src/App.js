@@ -1473,23 +1473,41 @@ function Dashboard({ user, onLogout }) {
                 </div>
                 <div className="flex items-center space-x-3">
                   <label className="text-xs font-medium text-gray-600 dark:text-gray-300">Date Range:</label>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2">
-                      <CalendarIcon className="w-4 h-4 text-gray-500" />
-                      <Calendar
-                        mode="single"
-                        selected={startDateInput ? new Date(startDateInput) : undefined}
-                        onSelect={(d) => setStartDateInput(d ? d.toISOString().slice(0,10) : "")}
-                      />
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-md text-sm bg-white dark:bg-gray-800">
+                            <CalendarIcon className="w-4 h-4 text-gray-500" />
+                            {startDateInput ? startDateInput : 'Start date'}
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent>
+                          <Calendar
+                            mode="single"
+                            selected={startDateInput ? new Date(startDateInput) : undefined}
+                            onSelect={(d) => setStartDateInput(d ? d.toISOString().slice(0,10) : "")}
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
                     <span className="text-gray-500 dark:text-gray-400">to</span>
                     <div className="flex items-center gap-2">
-                      <CalendarIcon className="w-4 h-4 text-gray-500" />
-                      <Calendar
-                        mode="single"
-                        selected={endDateInput ? new Date(endDateInput) : undefined}
-                        onSelect={(d) => setEndDateInput(d ? d.toISOString().slice(0,10) : "")}
-                      />
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button className="inline-flex items-center gap-2 px-3 py-1.5 border rounded-md text-sm bg-white dark:bg-gray-800">
+                            <CalendarIcon className="w-4 h-4 text-gray-500" />
+                            {endDateInput ? endDateInput : 'End date'}
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent>
+                          <Calendar
+                            mode="single"
+                            selected={endDateInput ? new Date(endDateInput) : undefined}
+                            onSelect={(d) => setEndDateInput(d ? d.toISOString().slice(0,10) : "")}
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
                   <button
