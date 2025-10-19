@@ -1370,7 +1370,8 @@ async def list_alerts(
                 "acknowledged_by": a.get("acknowledged_by"),
                 "notes": a.get("notes"),
                 "assigned_to": a.get("assigned_to"),
-                "favorite": a.get("favorite", False)
+                "favorite": a.get("favorite", False),
+                "created_at": a["created_at"].isoformat() if a.get("created_at") else None
             }
             for a in alerts
         ]
