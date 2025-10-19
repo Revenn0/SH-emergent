@@ -1002,6 +1002,8 @@ function Dashboard({ user, onLogout }) {
   const BikeHistoryModal = () => {
     const [newNote, setNewNote] = useState("");
     const [addingNote, setAddingNote] = useState(false);
+    const [editingNoteId, setEditingNoteId] = useState(null);
+    const [editNoteText, setEditNoteText] = useState("");
     
     if (!showBikeHistoryModal || !selectedBike) return null;
 
@@ -1026,8 +1028,49 @@ function Dashboard({ user, onLogout }) {
       }
     };
     
+    const handleEditNote = async (noteId) => {
+      if (!editNoteText.trim()) return;
+      
+      try {
+        await api.put(`/bikes/notes/${noteId}`, { note: editNoteText });
+        setEditingNoteId(null);
+        setEditNoteText("");
+        // Reload history
+        const response = await api.get(`/bikes/${selectedBike.id}/history`);
+        setBikeHistory({
+          alerts: response.data.alerts || [],
+          notes: response.data.notes || []
+        });
+      } catch (error) {
+        console.error("Failed to edit note:", error);
+        alert("Failed to edit note");
+      }
+    };
+    
+    const handleDeleteNote = async (noteId) => {
+      if (!window.confirm("Are you sure you want to delete this note?")) return;
+      
+      try {
+        await api.delete(`/bikes/notes/${noteId}`);
+        // Reload history
+        const response = await api.get(`/bikes/${selectedBike.id}/history`);
+        setBikeHistory({
+          alerts: response.data.alerts || [],
+          notes: response.data.notes || []
+        });
+      } catch (error) {
+        console.error("Failed to delete note:", error);
+        alert("Failed to delete note");
+      }
+    };
+    
     // Sort alerts by created_at DESC (newest first)
     const sortedAlerts = [...(bikeHistory.alerts || [])].sort((a, b) => 
+      new Date(b.created_at) - new Date(a.created_at)
+    );
+    
+    // Sort notes by created_at DESC (newest first)
+    const sortedNotes = [...(bikeHistory.notes || [])].sort((a, b) => 
       new Date(b.created_at) - new Date(a.created_at)
     );
 
@@ -1083,6 +1126,80 @@ function Dashboard({ user, onLogout }) {
                   </div>
                 </div>
                 
+                {/* Notes Section - FIRST */}
+                {sortedNotes && sortedNotes.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                      Notes ({sortedNotes.length})
+                    </h3>
+                    <div className="space-y-2">
+                      {sortedNotes.map((note, index) => (
+                        <div
+                          key={note.id || index}
+                          className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 border border-yellow-200 dark:border-yellow-800"
+                        >
+                          {editingNoteId === note.id ? (
+                            <div className="space-y-2">
+                              <input
+                                type="text"
+                                value={editNoteText}
+                                onChange={(e) => setEditNoteText(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                              />
+                              <div className="flex space-x-2">
+                                <button
+                                  onClick={() => handleEditNote(note.id)}
+                                  className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingNoteId(null);
+                                    setEditNoteText("");
+                                  }}
+                                  className="px-3 py-1 bg-gray-300 text-gray-700 rounded text-xs hover:bg-gray-400"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-sm text-gray-700 dark:text-gray-300">{note.note}</p>
+                              <div className="flex items-center justify-between mt-2">
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  <span className="font-medium">By: {note.created_by || user?.username || 'Unknown'}</span>
+                                  <span className="mx-2">•</span>
+                                  <span>{formatUKTimestamp(note.created_at)}</span>
+                                </div>
+                                <div className="flex space-x-2">
+                                  <button
+                                    onClick={() => {
+                                      setEditingNoteId(note.id);
+                                      setEditNoteText(note.note);
+                                    }}
+                                    className="text-blue-600 hover:text-blue-800 text-xs"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteNote(note.id)}
+                                    className="text-red-600 hover:text-red-800 text-xs"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Alerts Section - SECOND */}
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                     Recent Alerts ({sortedAlerts.length})
@@ -1138,27 +1255,6 @@ function Dashboard({ user, onLogout }) {
                     </div>
                   )}
                 </div>
-
-                {bikeHistory.notes && bikeHistory.notes.length > 0 && (
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                      Notes ({bikeHistory.notes.length})
-                    </h3>
-                    <div className="space-y-2">
-                      {bikeHistory.notes.map((note, index) => (
-                        <div
-                          key={index}
-                          className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 border border-yellow-200 dark:border-yellow-800"
-                        >
-                          <p className="text-sm text-gray-700 dark:text-gray-300">{note.note}</p>
-                          <span className="text-xs text-gray-500 dark:text-gray-400 mt-1 block">
-                            {formatUKTimestamp(note.created_at)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>
