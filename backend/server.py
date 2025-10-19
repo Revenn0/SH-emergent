@@ -1930,6 +1930,22 @@ async def delete_bike_note(note_id: int, current_user: dict = Depends(get_curren
     return {"success": True}
 
 
+@api_router.put("/bikes/notes/{note_id}")
+async def update_bike_note(note_id: int, request: AddBikeNoteRequest, current_user: dict = Depends(get_current_user)):
+    """Update a bike note"""
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE bike_notes
+            SET note = $1, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2 AND user_id = $3
+            """,
+            request.note, note_id, current_user['id']
+        )
+    
+    return {"success": True}
+
+
 @api_router.get("/bikes/by-tracker/{tracker_name}")
 async def get_bike_by_tracker_name(tracker_name: str, current_user: dict = Depends(get_current_user)):
     """Get bike ID by tracker name"""
