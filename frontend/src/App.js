@@ -502,7 +502,7 @@ function Dashboard({ user, onLogout }) {
   const groupAlertsByDevice = (alertList) => {
     const grouped = {};
     
-    // Filter alerts by date range if applied
+    // Filter alerts by date range if applied (FRONTEND FILTERING)
     const filteredAlerts = alertList.filter(alert => 
       isAlertInDateRange(alert, appliedStartDate, appliedEndDate)
     );
