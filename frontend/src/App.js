@@ -317,7 +317,7 @@ function Dashboard({ user, onLogout }) {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(200); // Fetch all alerts per page to minimize requests
   const [hasMore, setHasMore] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false); // deprecated; no longer used since we show all alerts
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 20,
