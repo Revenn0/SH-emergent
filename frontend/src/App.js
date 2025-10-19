@@ -311,6 +311,7 @@ function Dashboard({ user, onLogout }) {
   const [selectedSyncDate, setSelectedSyncDate] = useState(null);
   const [startDateInput, setStartDateInput] = useState("");
   const [endDateInput, setEndDateInput] = useState("");
+  const [dateRange, setDateRange] = useState({ from: undefined, to: undefined });
   const [appliedStartDate, setAppliedStartDate] = useState("");
   const [appliedEndDate, setAppliedEndDate] = useState("");
   
