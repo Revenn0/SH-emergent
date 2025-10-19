@@ -146,7 +146,7 @@ async def sync_emails_background(user: dict, limit: int = 100) -> int:
                 user['id']
             )
         
-        _, message_numbers = imap.search(None, f'FROM "alerts-no-reply@tracking-update.com"')
+        _, message_numbers = imap.search(None, 'FROM "alerts-no-reply@tracking-update.com"')
         email_ids = message_numbers[0].split()
         
         if checkpoint and checkpoint['last_email_id']:
