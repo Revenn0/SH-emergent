@@ -1231,7 +1231,7 @@ async def get_categories(current_user: dict = Depends(get_current_user)):
 async def list_alerts(
     category: Optional[str] = Query(None), 
     page: int = Query(1, ge=1),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(5000, ge=1, le=10000),
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user)
