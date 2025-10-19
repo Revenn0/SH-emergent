@@ -416,9 +416,12 @@ function Dashboard({ user, onLogout }) {
       params.append('page', pageNum);
       params.append('limit', limit);
       
-      if (filterDate) {
-        params.append('start_date', filterDate);
-        params.append('end_date', filterDate);
+      if (appliedStartDate) {
+        params.append('start_date', appliedStartDate);
+      }
+      
+      if (appliedEndDate) {
+        params.append('end_date', appliedEndDate);
       }
       
       const url = `/alerts/list?${params.toString()}`;
