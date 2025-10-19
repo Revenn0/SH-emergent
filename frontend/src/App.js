@@ -416,13 +416,7 @@ function Dashboard({ user, onLogout }) {
       params.append('page', pageNum);
       params.append('limit', limit);
       
-      if (appliedStartDate) {
-        params.append('start_date', appliedStartDate);
-      }
-      
-      if (appliedEndDate) {
-        params.append('end_date', appliedEndDate);
-      }
+      // Date filtering will be done in frontend
       
       const url = `/alerts/list?${params.toString()}`;
       
