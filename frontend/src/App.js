@@ -1386,7 +1386,7 @@ function Dashboard({ user, onLogout }) {
             </div>
             <p className="text-2xl font-semibold text-gray-900 dark:text-white">0</p>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Read alerts</p>
-          </div>
+          </CardContent></Card>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
