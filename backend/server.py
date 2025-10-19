@@ -941,7 +941,8 @@ def get_email_body(msg):
     else:
         try:
             body = msg.get_payload(decode=True).decode('utf-8', errors='ignore')
-        except:
+        except Exception:
+            # Ignore decoding errors for non-text payloads
             pass
     return body
 
