@@ -315,7 +315,7 @@ function Dashboard({ user, onLogout }) {
   const [appliedEndDate, setAppliedEndDate] = useState("");
   
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(20); // Reduced for lazy loading
+  const [limit, setLimit] = useState(200); // Fetch all alerts per page to minimize requests
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [pagination, setPagination] = useState({
