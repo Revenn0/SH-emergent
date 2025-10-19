@@ -1238,8 +1238,12 @@ async def list_alerts(
         )
         
         offset = (page - 1) * limit
-        where_clause = "WHERE (acknowledged IS NULL OR acknowledged = FALSE)"
+        where_clause = "WHERE 1=1"
         params = []
+        
+        # Only filter by acknowledged if no date filter is applied
+        if not start_date and not end_date:
+            where_clause += " AND (acknowledged IS NULL OR acknowledged = FALSE)"
         
         if category and category != "All":
             where_clause += f" AND alert_type = ${len(params) + 1}"
@@ -1248,14 +1252,14 @@ async def list_alerts(
         if start_date:
             from datetime import datetime
             start_datetime = datetime.strptime(start_date, "%Y-%m-%d")
-            where_clause += f" AND created_at >= ${len(params) + 1}"
-            params.append(start_datetime)
+            where_clause += f" AND DATE(created_at) >= ${len(params) + 1}"
+            params.append(start_datetime.date())
         
         if end_date:
-            from datetime import datetime, timedelta
-            end_datetime = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
-            where_clause += f" AND created_at < ${len(params) + 1}"
-            params.append(end_datetime)
+            from datetime import datetime
+            end_datetime = datetime.strptime(end_date, "%Y-%m-%d")
+            where_clause += f" AND DATE(created_at) <= ${len(params) + 1}"
+            params.append(end_datetime.date())
         
         total_count = await conn.fetchval(
             f"SELECT COUNT(*) FROM tracker_alerts {where_clause}",
