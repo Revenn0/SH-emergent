@@ -1548,36 +1548,36 @@ function Dashboard({ user, onLogout }) {
             </p>
 
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-700">
-                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-600 dark:text-gray-300">Device</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-600 dark:text-gray-300">Type</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-600 dark:text-gray-300">Category</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-600 dark:text-gray-300">Message</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-600 dark:text-gray-300">Severity</th>
-                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-600 dark:text-gray-300">Timestamp</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Device</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Message</TableHead>
+                    <TableHead>Severity</TableHead>
+                    <TableHead>Timestamp</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {groupedAlerts.filter(group => 
                     !searchQuery || group.device.toLowerCase().includes(searchQuery.toLowerCase())
                   ).length === 0 ? (
-                    <tr>
-                      <td colSpan="6" className="text-center py-12 text-sm text-gray-500 dark:text-gray-400">
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-12 text-sm text-gray-500 dark:text-gray-400">
                         {searchQuery ? `No alerts found for "${searchQuery}"` : "No alerts available"}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ) : (
                     groupedAlerts.filter(group => 
                       !searchQuery || group.device.toLowerCase().includes(searchQuery.toLowerCase())
                     ).slice(0, showAllBikes ? undefined : bikesDisplayLimit).map((group, idx) => (
-                      <tr 
+                      <TableRow 
                         key={idx} 
-                        className="border-b border-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900 cursor-pointer transition"
+                        className="cursor-pointer"
                         onClick={() => openAlertModal(group)}
                       >
-                        <td className="py-3 px-4">
+                        <TableCell>
                           <div className="flex items-center space-x-3">
                             <Bike className="w-5 h-5 text-gray-700 dark:text-gray-300" strokeWidth={2} />
                             <span className="text-base font-bold text-gray-900 dark:text-white">{group.device}</span>
@@ -1585,9 +1585,9 @@ function Dashboard({ user, onLogout }) {
                               {getCountBadge(group.count)}
                             </span>
                           </div>
-                        </td>
-                        <td className="py-3 px-4 text-sm text-gray-700 dark:text-gray-300">{group.latestAlert.alert_type}</td>
-                        <td className="py-3 px-4">
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-700 dark:text-gray-300">{group.latestAlert.alert_type}</TableCell>
+                        <TableCell>
                           <span className={`inline-flex px-2 py-1 rounded text-xs font-medium ${
                             (group.severity === "crash-detected" || group.severity === "heavy-impact") ? "bg-red-100 text-red-700" :
                             group.severity === "high" ? "bg-orange-100 text-orange-700" :
@@ -1597,11 +1597,11 @@ function Dashboard({ user, onLogout }) {
                              group.severity === "heavy-impact" ? "Crash detect" : 
                              group.severity === "high" ? "High Priority" : "Normal"}
                           </span>
-                        </td>
-                        <td className="py-3 px-4 text-sm text-gray-600 dark:text-gray-300 truncate max-w-xs">
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-600 dark:text-gray-300 truncate max-w-xs">
                           {group.latestAlert.location || "No location"}
-                        </td>
-                        <td className="py-3 px-4">
+                        </TableCell>
+                        <TableCell>
                           <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
                             (group.severity === "crash-detected" || group.severity === "heavy-impact") ? "bg-red-100 text-red-700" :
                             group.severity === "high" ? "bg-orange-100 text-orange-700" :
@@ -1610,15 +1610,15 @@ function Dashboard({ user, onLogout }) {
                             {(group.severity === "crash-detected" || group.severity === "heavy-impact") ? "High" : 
                              group.severity === "high" ? "Medium" : "Low"}
                           </span>
-                        </td>
-                        <td className="py-3 px-4 text-xs text-gray-500 dark:text-gray-400">
+                        </TableCell>
+                        <TableCell className="text-xs text-gray-500 dark:text-gray-400">
                           {formatUKTimestamp(group.latestAlert.alert_time)}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))
                   )}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
             
             {/* Show More/Less bikes button */}
