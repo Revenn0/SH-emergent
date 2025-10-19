@@ -316,17 +316,6 @@ function Dashboard({ user, onLogout }) {
   }, [selectedCategory]);
 
   useEffect(() => {
-    // Auto-refresh alerts and statistics every 60 seconds (silent, no loading spinner)
-    const interval = setInterval(() => {
-      loadAlertsQuiet(selectedCategory !== "All" ? selectedCategory : null);
-    }, 60000);
-    
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [selectedCategory]);
-
-  useEffect(() => {
     if (alerts.length > 0) {
       groupAlertsByDevice(alerts);
     }
