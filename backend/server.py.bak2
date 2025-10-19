@@ -1592,7 +1592,7 @@ async def delete_alert(alert_id: int, current_user: dict = Depends(get_current_u
     """Delete an alert (only from app, not from Gmail)"""
     async with db_pool.acquire() as conn:
         await conn.execute(
-            "DELETE FROM tracker_alerts WHERE id = $1",
+            "DELETE FROM tracker_alerts WHERE id = $1 AND user_id = $2",
             alert_id, current_user['id']
         )
     
@@ -1674,7 +1674,7 @@ async def toggle_favorite(alert_id: int, current_user: dict = Depends(get_curren
     """Toggle favorite status"""
     async with db_pool.acquire() as conn:
         current = await conn.fetchrow(
-            "SELECT favorite FROM tracker_alerts WHERE id = $1",
+            "SELECT favorite FROM tracker_alerts WHERE id = $1 AND user_id = $2",
             alert_id, current_user['id']
         )
         
@@ -1845,9 +1845,9 @@ async def get_bike_history(bike_id: int, current_user: dict = Depends(get_curren
         bike = await conn.fetchrow(
             """
             SELECT * FROM bikes
-            WHERE id = $1
+            WHERE id = $1 AND user_id = $2
             """,
-            bike_id
+            bike_id, current_user['id']
         )
         
         if not bike:
@@ -1856,11 +1856,11 @@ async def get_bike_history(bike_id: int, current_user: dict = Depends(get_curren
         alerts = await conn.fetch(
             """
             SELECT * FROM tracker_alerts
-            WHERE tracker_name = $1
+            WHERE user_id = $1 AND tracker_name = $2
             ORDER BY created_at DESC
             LIMIT 50
             """,
-            bike['tracker_name']
+            current_user['id'], bike['tracker_name']
         )
         
         notes = await conn.fetch(
@@ -1895,9 +1895,9 @@ async def add_bike_note(
         bike = await conn.fetchrow(
             """
             SELECT * FROM bikes
-            WHERE id = $1
+            WHERE id = $1 AND user_id = $2
             """,
-            bike_id
+            bike_id, current_user['id']
         )
         
         if not bike:
@@ -1909,7 +1909,7 @@ async def add_bike_note(
             VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
             RETURNING *
             """,
-            bike_id, request.note, current_user.get('username', 'User')
+            bike_id, current_user['id'], request.note, current_user.get('username', 'User')
         )
         
         return {"success": True, "note": dict(note)}
@@ -1922,7 +1922,7 @@ async def delete_bike_note(note_id: int, current_user: dict = Depends(get_curren
         await conn.execute(
             """
             DELETE FROM bike_notes
-            WHERE id = $1
+            WHERE id = $1 AND user_id = $2
             """,
             note_id, current_user['id']
         )
@@ -1953,7 +1953,7 @@ async def get_bike_by_tracker_name(tracker_name: str, current_user: dict = Depen
         bike = await conn.fetchrow(
             """
             SELECT id FROM bikes
-            WHERE tracker_name = $1
+            WHERE user_id = $1 AND tracker_name = $2
             """,
             current_user['id'], tracker_name
         )
@@ -1965,7 +1965,7 @@ async def get_bike_by_tracker_name(tracker_name: str, current_user: dict = Depen
                     tracker_name, device_serial,
                     MAX(created_at) as latest_alert_at
                 FROM tracker_alerts
-                WHERE tracker_name = $1
+                WHERE user_id = $1 AND tracker_name = $2
                 GROUP BY tracker_name, device_serial
                 """,
                 current_user['id'], tracker_name
