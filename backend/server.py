@@ -1230,16 +1230,16 @@ async def list_alerts(
     end_date: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user)
 ):
-    """Get tracker alerts with pagination and optional category filter"""
+    """Get tracker alerts with pagination and optional category filter - SHARED DATABASE"""
     async with db_pool.acquire() as conn:
+        # Get any user with gmail configured for display
         user = await conn.fetchrow(
-            "SELECT * FROM users WHERE id = $1",
-            current_user['id']
+            "SELECT * FROM users WHERE gmail_email IS NOT NULL LIMIT 1"
         )
         
         offset = (page - 1) * limit
-        where_clause = "WHERE user_id = $1 AND (acknowledged IS NULL OR acknowledged = FALSE)"
-        params = [current_user['id']]
+        where_clause = "WHERE (acknowledged IS NULL OR acknowledged = FALSE)"
+        params = []
         
         if category and category != "All":
             where_clause += f" AND alert_type = ${len(params) + 1}"
