@@ -724,10 +724,12 @@ function Dashboard({ user, onLogout }) {
         params.append('category', selectedCategory);
       }
       
-      // Add date filter
-      if (filterDate) {
-        params.append('start_date', filterDate);
-        params.append('end_date', filterDate);
+      // Add date filter for export
+      if (appliedStartDate) {
+        params.append('start_date', appliedStartDate);
+      }
+      if (appliedEndDate) {
+        params.append('end_date', appliedEndDate);
       }
       
       const url = `/alerts/export?${params.toString()}`;
