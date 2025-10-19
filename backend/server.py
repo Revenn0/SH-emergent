@@ -1319,7 +1319,7 @@ async def list_alerts(
         heavy_impact_count = await conn.fetchval(
             f"""
             SELECT COUNT(*) FROM tracker_alerts 
-            {where_clause} AND alert_type LIKE '%Crash detect%'
+            {where_clause} AND alert_type = 'Heavy Impact'
             """,
             *params
         ) or 0
@@ -1527,7 +1527,7 @@ async def get_stats_only(
         heavy_impact_count = await conn.fetchval(
             f"""
             SELECT COUNT(*) FROM tracker_alerts 
-            {where_clause} AND alert_type LIKE '%Crash detect%'
+            {where_clause} AND alert_type = 'Heavy Impact'
             """,
             *params
         ) or 0
