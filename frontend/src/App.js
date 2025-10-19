@@ -1199,10 +1199,16 @@ function Dashboard({ user, onLogout }) {
                             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                               {alert.alert_type}
                             </span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
                               {formatUKTimestamp(alert.created_at)}
                             </span>
                           </div>
+                          
+                          {alert.alert_time && (
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                              Alert Time: {alert.alert_time}
+                            </div>
+                          )}
                           
                           {alert.location && (
                             <div className="flex items-start space-x-2 text-sm text-gray-600 dark:text-gray-300">
