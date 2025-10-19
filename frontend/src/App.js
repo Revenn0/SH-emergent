@@ -460,12 +460,12 @@ function Dashboard({ user, onLogout }) {
       // Stats will be calculated in groupAlertsByDevice based on filtered data
       setGmailConnected(response.data.connected);
       setGmailEmail(response.data.email || "");
-      setHasMore(response.data.pagination?.has_next || false);
-      setPagination(response.data.pagination || {
-        page: pageNum,
+      setHasMore(false);
+      setPagination({
+        page: 1,
         limit: limit,
-        total: 0,
-        total_pages: 0,
+        total: append ? (alerts.length + response.data.alerts.length) : (response.data.alerts?.length || 0),
+        total_pages: 1,
         has_next: false,
         has_prev: false
       });
