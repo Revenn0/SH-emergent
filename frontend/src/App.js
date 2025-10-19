@@ -9,7 +9,7 @@ import {
   MessageSquare, CheckCircle2, RefreshCw, Loader2, Download
 } from "lucide-react";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8080';
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 console.log('BACKEND_URL:', BACKEND_URL);
