@@ -66,22 +66,35 @@ function CrashNotification({ crashAlerts, onDismiss }) {
   if (crashAlerts.length === 0) return null;
 
   return (
-    <div className="fixed top-20 right-6 z-50 space-y-3">
+    <div className="fixed top-20 right-6 z-50 space-y-3 max-w-md">
       {crashAlerts.map((crash, index) => (
         <div
           key={index}
-          className="bg-red-600 text-white px-6 py-4 rounded-lg shadow-2xl border-2 border-red-700 animate-pulse"
+          className="bg-red-50 dark:bg-red-900/20 border-2 border-red-500 dark:border-red-700 rounded-lg p-4 shadow-lg animate-pulse"
         >
-          <div className="flex items-center space-x-3">
-            <AlertTriangle className="w-6 h-6" />
-            <div className="flex-1">
-              <div className="font-bold text-lg">CRASH DETECTED!</div>
-              <div className="text-sm mt-1">{crash.device}</div>
-              <div className="text-xs opacity-90 mt-1">{formatUKTimestamp(crash.timestamp)}</div>
+          <div className="flex items-start justify-between">
+            <div className="flex items-start space-x-3 flex-1">
+              <div className="bg-red-600 rounded-full p-2">
+                <AlertTriangle className="w-6 h-6 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-red-900 dark:text-red-200">
+                  🚨 CRASH DETECTED!
+                </h3>
+                <p className="text-sm font-semibold text-red-800 dark:text-red-300 mt-1">
+                  Bike: {crash.device}
+                </p>
+                <p className="text-xs text-red-700 dark:text-red-400 mt-1">
+                  {formatUKTimestamp(crash.timestamp)}
+                </p>
+                <p className="text-xs text-red-600 dark:text-red-500 mt-2">
+                  Heavy Impact + Over-turn detected
+                </p>
+              </div>
             </div>
             <button
               onClick={() => onDismiss(crash.device)}
-              className="text-white hover:text-gray-200 transition"
+              className="ml-2 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
             >
               <X className="w-5 h-5" />
             </button>
