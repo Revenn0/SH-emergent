@@ -74,8 +74,8 @@ const isAlertInDateRange = (alert, startDate, endDate) => {
   if (!startDate && !endDate) return true;
   
   try {
-    // Get the alert date from created_at (ISO format from backend)
-    const alertDate = new Date(alert.created_at);
+    // Get the alert date: use created_at (ISO from backend) when present, otherwise fall back to alert_time
+    const alertDate = new Date(source);
     if (isNaN(alertDate.getTime())) return true;
     
     // Convert to date only for comparison
