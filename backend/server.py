@@ -1341,7 +1341,7 @@ async def list_alerts(
             alert_types = set(row["alert_types"] or [])
             has_light_sensor = "Light Sensor" in alert_types
             has_over_turn = "Over-turn" in alert_types
-            has_heavy_impact = any("Crash detect" in str(t) for t in alert_types if t)
+            has_heavy_impact = any("Heavy Impact" in str(t) for t in alert_types if t)
             has_no_comm = any("No Communication" in str(t) for t in alert_types if t)
             
             if has_light_sensor and has_over_turn:
@@ -1549,7 +1549,7 @@ async def get_stats_only(
             alert_types = set(row["alert_types"] or [])
             has_light_sensor = "Light Sensor" in alert_types
             has_over_turn = "Over-turn" in alert_types
-            has_heavy_impact = any("Crash detect" in str(t) for t in alert_types if t)
+            has_heavy_impact = any("Heavy Impact" in str(t) for t in alert_types if t)
             has_no_comm = any("No Communication" in str(t) for t in alert_types if t)
             
             if has_light_sensor and has_over_turn:
