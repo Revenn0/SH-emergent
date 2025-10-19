@@ -310,14 +310,14 @@ function Dashboard({ user, onLogout }) {
   }, []);
 
   useEffect(() => {
-    // Reset to page 1 and reload when category changes
+    // Reset to page 1 and reload when category or date filter changes
     setPage(1);
     if (selectedCategory !== "All") {
       loadAlerts(selectedCategory, 1, false);
     } else {
       loadAlerts(null, 1, false);
     }
-  }, [selectedCategory]);
+  }, [selectedCategory, appliedStartDate, appliedEndDate]);
 
   useEffect(() => {
     if (alerts.length > 0) {
