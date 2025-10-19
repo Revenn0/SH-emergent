@@ -276,6 +276,10 @@ function Dashboard({ user, onLogout }) {
   const [bikesDisplayLimit, setBikesDisplayLimit] = useState(6);
   const [showAllBikes, setShowAllBikes] = useState(false);
   const [selectedSyncDate, setSelectedSyncDate] = useState(null);
+  const [startDateInput, setStartDateInput] = useState("");
+  const [endDateInput, setEndDateInput] = useState("");
+  const [appliedStartDate, setAppliedStartDate] = useState("");
+  const [appliedEndDate, setAppliedEndDate] = useState("");
   
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20); // Reduced for lazy loading
