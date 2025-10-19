@@ -503,7 +503,12 @@ function Dashboard({ user, onLogout }) {
   const groupAlertsByDevice = (alertList) => {
     const grouped = {};
     
-    alertList.forEach(alert => {
+    // Filter alerts by date range if applied
+    const filteredAlerts = alertList.filter(alert => 
+      isAlertInDateRange(alert, appliedStartDate, appliedEndDate)
+    );
+    
+    filteredAlerts.forEach(alert => {
       const device = alert.tracker_name || "Unknown";
       if (!grouped[device]) {
         grouped[device] = {
