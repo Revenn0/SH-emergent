@@ -487,19 +487,9 @@ function Dashboard({ user, onLogout }) {
     }
   };
   
+  // Deprecated: We now fetch all alerts at once and do not paginate on the client
   const loadMoreAlerts = async () => {
-    if (hasMore && !loadingMore) {
-      setLoadingMore(true);
-      const nextPage = page + 1;
-      // Manually track page without triggering effects
-      const success = await loadAlerts(selectedCategory !== "All" ? selectedCategory : null, nextPage, true);
-      // Only update page state after successful load to track position
-      if (success) {
-        setPage(nextPage);
-      } else {
-        setLoadingMore(false); // Reset loading state on failure
-      }
-    }
+    return;
   };
 
   const groupAlertsByDevice = (alertList) => {
