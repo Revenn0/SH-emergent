@@ -61,6 +61,33 @@ const formatUKTimestamp = (dateString) => {
   }
 };
 
+const isAlertInDateRange = (alert, startDate, endDate) => {
+  if (!startDate && !endDate) return true;
+  
+  try {
+    // Parse the alert timestamp (assuming it's in ISO format from backend)
+    const alertDate = new Date(alert.created_at || alert.alert_time);
+    if (isNaN(alertDate.getTime())) return true; // Include if can't parse
+    
+    // Convert to date only (ignore time for comparison)
+    const alertDateOnly = new Date(alertDate.getFullYear(), alertDate.getMonth(), alertDate.getDate());
+    
+    if (startDate) {
+      const start = new Date(startDate);
+      if (alertDateOnly < start) return false;
+    }
+    
+    if (endDate) {
+      const end = new Date(endDate);
+      if (alertDateOnly > end) return false;
+    }
+    
+    return true;
+  } catch {
+    return true; // Include if error parsing
+  }
+};
+
 // Crash Alert Notification Component
 function CrashNotification({ crashAlerts, onDismiss }) {
   if (crashAlerts.length === 0) return null;
