@@ -850,36 +850,17 @@ function Dashboard({ user, onLogout }) {
           </div>
           <div className="flex items-center space-x-3">
             <button
-              onClick={handleRefreshAlerts}
+              onClick={handleSyncTodayEmails}
               disabled={syncing}
-              className="flex items-center space-x-2 px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 dark:text-gray-200 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 dark:bg-gray-900 dark:hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
-              <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-              <span>Refresh Alerts</span>
+              <Download className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+              <span>
+                {syncing && syncProgress.total > 0 
+                  ? `Syncing: ${syncProgress.processed}/${syncProgress.total}` 
+                  : 'Sync Emails'}
+              </span>
             </button>
-            
-            <div className="flex items-center space-x-2">
-              <DatePicker
-                selected={selectedSyncDate}
-                onChange={(date) => setSelectedSyncDate(date)}
-                dateFormat="yyyy-MM-dd"
-                placeholderText="Select date"
-                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                maxDate={new Date()}
-              />
-              <button
-                onClick={handleSyncTodayEmails}
-                disabled={syncing}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-md hover:bg-blue-700 dark:hover:bg-blue-600 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-              >
-                <Download className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-                <span>
-                  {syncing && syncProgress.total > 0 
-                    ? `Syncing: ${syncProgress.processed}/${syncProgress.total}` 
-                    : 'Sync Emails'}
-                </span>
-              </button>
-            </div>
           </div>
         </div>
       </header>
