@@ -1471,23 +1471,27 @@ function Dashboard({ user, onLogout }) {
                     </button>
                   )}
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-3">
                   <label className="text-xs font-medium text-gray-600 dark:text-gray-300">Date Range:</label>
-                  <input
-                    type="date"
-                    value={startDateInput}
-                    onChange={(e) => setStartDateInput(e.target.value)}
-                    placeholder="Start date"
-                    className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
-                  <span className="text-gray-500 dark:text-gray-400">to</span>
-                  <input
-                    type="date"
-                    value={endDateInput}
-                    onChange={(e) => setEndDateInput(e.target.value)}
-                    placeholder="End date"
-                    className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  />
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      <CalendarIcon className="w-4 h-4 text-gray-500" />
+                      <Calendar
+                        mode="single"
+                        selected={startDateInput ? new Date(startDateInput) : undefined}
+                        onSelect={(d) => setStartDateInput(d ? d.toISOString().slice(0,10) : "")}
+                      />
+                    </div>
+                    <span className="text-gray-500 dark:text-gray-400">to</span>
+                    <div className="flex items-center gap-2">
+                      <CalendarIcon className="w-4 h-4 text-gray-500" />
+                      <Calendar
+                        mode="single"
+                        selected={endDateInput ? new Date(endDateInput) : undefined}
+                        onSelect={(d) => setEndDateInput(d ? d.toISOString().slice(0,10) : "")}
+                      />
+                    </div>
+                  </div>
                   <button
                     onClick={handleApplyDateFilter}
                     disabled={!startDateInput && !endDateInput}
