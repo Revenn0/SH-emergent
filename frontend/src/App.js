@@ -390,6 +390,19 @@ function Dashboard({ user, onLogout }) {
     }
   };
 
+  const handleApplyDateFilter = () => {
+    setAppliedStartDate(startDateInput);
+    setAppliedEndDate(endDateInput);
+    setPage(1);
+  };
+  
+  const handleClearDateFilter = () => {
+    setStartDateInput("");
+    setEndDateInput("");
+    setAppliedStartDate("");
+    setAppliedEndDate("");
+    setPage(1);
+  };
   const loadAlerts = async (category = null, pageNum = page, append = false) => {
     try {
       if (!append) {
