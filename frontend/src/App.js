@@ -320,9 +320,9 @@ function Dashboard({ user, onLogout }) {
   const [loadingMore, setLoadingMore] = useState(false); // deprecated; no longer used since we show all alerts
   const [pagination, setPagination] = useState({
     page: 1,
-    limit: 20,
+    limit: limit,
     total: 0,
-    total_pages: 0,
+    total_pages: 1,
     has_next: false,
     has_prev: false
   });
