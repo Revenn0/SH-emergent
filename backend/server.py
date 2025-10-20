@@ -49,6 +49,9 @@ if allowed_origins_env:
     except Exception:
         pass
 
+app = FastAPI()
+api_router = APIRouter(prefix="/api")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(set(DEFAULT_ALLOWED_ORIGINS)),
@@ -56,10 +59,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-app = FastAPI()
-api_router = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
