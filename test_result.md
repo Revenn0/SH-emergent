@@ -123,3 +123,5 @@ test_plan:
 agent_communication:
   - agent: "testing"
     message: "Starting backend smoke tests for Neon-only setup with cookie-based auth flow verification"
+  - agent: "testing"
+    message: "✅ ALL BACKEND SMOKE TESTS PASSED (6/6) - Neon-only setup working correctly with cookie-based auth. Login auth flow intact, all endpoints responding properly, error handling working, no 200 limit cap enforcement on alerts list."
