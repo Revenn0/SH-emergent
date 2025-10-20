@@ -36,6 +36,28 @@ db_pool: asyncpg.Pool = None  # type: ignore
 
 # GEMINI_API_KEY support removed (not used)
 
+# CORS for cross-site frontend (e.g., Netlify)
+DEFAULT_ALLOWED_ORIGINS = [
+    "https://alerttracker-3.preview.emergentagent.com",
+    "https://tracker4th.netlify.app",
+]
+allowed_origins_env = os.environ.get("ALLOWED_ORIGINS", "").strip()
+if allowed_origins_env:
+    try:
+        extra = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
+        DEFAULT_ALLOWED_ORIGINS.extend(extra)
+    except Exception:
+        pass
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=list(set(DEFAULT_ALLOWED_ORIGINS)),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
