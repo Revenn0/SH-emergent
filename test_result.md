@@ -109,13 +109,7 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "POST /api/auth/login authentication"
-    - "GET /api/alerts/categories with auth"
-    - "GET /api/alerts/list basic functionality"
-    - "GET /api/bikes/list with auth"
-    - "POST /api/gmail/connect error handling"
-    - "GET /api/alerts/list high limit handling"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
