@@ -1,0 +1,14 @@
+[build]
+  base = "frontend"
+  command = "yarn install && yarn build"
+  publish = "build"
+
+[build.environment]
+  NODE_VERSION = "18"
+  YARN_VERSION = "1.22.22"
+
+# Optional: Preview/Production contexts can override env or commands
+# [context.production.environment]
+#   REACT_APP_BACKEND_URL = "https://your-backend.example.com"
+
+# Redirect rules can also be placed in frontend/public/_redirects
