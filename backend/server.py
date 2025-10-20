@@ -15,7 +15,7 @@ from datetime import datetime, timezone, timedelta
 import imaplib
 import email
 from email.header import decode_header
-import google.generativeai as genai
+# google.generativeai removed: not used
 import re
 import asyncio
 from functools import lru_cache
