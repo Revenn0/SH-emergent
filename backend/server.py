@@ -34,9 +34,7 @@ load_dotenv(ROOT_DIR / '.env', override=True)  # Force override Replit's DATABAS
 
 db_pool: asyncpg.Pool = None  # type: ignore
 
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+# GEMINI_API_KEY support removed (not used)
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
