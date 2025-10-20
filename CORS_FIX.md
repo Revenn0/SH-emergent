@@ -13,7 +13,7 @@ Login error: Network Error
 O **CORS (Cross-Origin Resource Sharing)** não estava permitindo requisições do frontend.
 
 No Replit:
-- **Frontend**: `https://3ccd770e-286e-4b10-bf81-649b35418e6f-00-1akfuqkm3jdil.spock.replit.dev`
+- **Frontend**: `https://3ccd7730e-286e-4b10-bf81-649b35418e6f-00-1akfuqkm3jdil.spock.replit.dev`
 - **Backend**: `https://3ccd770e-286e-4b10-bf81-649b35418e6f-00-1akfuqkm3jdil.spock.replit.dev:8080`
 
 O backend só aceitava requisições de `localhost`, não da URL HTTPS do Replit.
